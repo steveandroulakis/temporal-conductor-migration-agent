@@ -1,0 +1,29 @@
+[project]
+name = "schema-approval"
+version = "0.1.0"
+description = "Temporal migration of the Conductor schema approval workflow"
+authors = [{ name = "Temporal Migration" }]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "temporalio>=1.8.0",
+]
+
+[project.scripts]
+worker = "schema_approval.worker:main"
+starter = "schema_approval.starter:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I"]
