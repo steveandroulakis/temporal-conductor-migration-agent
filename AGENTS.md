@@ -69,17 +69,19 @@ pyproject.toml
 
 > **Imports:** Use relative imports inside `_your_app_name_here_` (e.g., `from .activities import compose_greeting`). This keeps things consistent as a proper Python package.
 
-> **Running scripts:** Since this is a package structure, run scripts using the module syntax:
-> - `uv run python -m _your_app_name_here_.worker`
-> - `uv run python -m _your_app_name_here_.starter`
->
-> Or add console scripts to `pyproject.toml` (recommended):
+> **Running scripts (MANDATORY APPROACH):** This project MUST be configured as a package with console scripts in `pyproject.toml`:
 > ```toml
 > [project.scripts]
 > worker = "_your_app_name_here_.worker:main"
 > starter = "_your_app_name_here_.starter:main"
+>
+> [tool.uv]
+> package = true
 > ```
-> Then run: `uv run worker` or `uv run starter`
+>
+> **CRITICAL:** The `[tool.uv]` section with `package = true` is REQUIRED. Without it, entry points will not be installed and console scripts will fail with "No such file or directory" errors.
+>
+> After the end user runs `uv sync`, they can execute: `uv run worker` or `uv run starter`
 
 ---
 
@@ -170,6 +172,9 @@ dev = ["ruff>=0.1.0", "mypy>=1.0.0"]
 worker = "_your_app_name_here_.worker:main"
 starter = "_your_app_name_here_.starter:main"
 
+[tool.uv]
+package = true
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
@@ -181,7 +186,7 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 ```
 
-> **Note:** The `[project.scripts]` section creates console commands that can be run with `uv run worker` or `uv run starter`. This is the recommended approach for package-based projects.
+> **CRITICAL:** The `[tool.uv]` section with `package = true` is REQUIRED for console scripts to work. The `[project.scripts]` section creates console commands that can be run with `uv run worker` or `uv run starter` after running `uv sync`.
 
 ---
 
@@ -300,15 +305,9 @@ if __name__ == "__main__":
 > **Important:** The `main()` function must be synchronous (not async) to work as a console script entry point. It wraps the async `run_worker()` function with `asyncio.run()`. If `main()` is async, you'll get "coroutine was never awaited" errors when running via console scripts.
 
 **Running the worker:**
-```bash
-# Option 1: Run as module
-uv run python -m _your_app_name_here_.worker
 
-# Option 2: Use console script (best practice)
-# Add to pyproject.toml:
-# [project.scripts]
-# worker = "_your_app_name_here_.worker:main"
-# Then run:
+After the end user runs `uv sync` to install dependencies and entry points:
+```bash
 uv run worker
 ```
 
@@ -348,15 +347,9 @@ if __name__ == "__main__":
 > **Important:** The `main()` function must be synchronous (not async) to work as a console script entry point. It wraps the async `run_starter()` function with `asyncio.run()`. If `main()` is async, you'll get "coroutine was never awaited" errors when running via console scripts.
 
 **Running the starter:**
-```bash
-# Option 1: Run as module
-uv run python -m _your_app_name_here_.starter
 
-# Option 2: Use console script (best practice)
-# Add to pyproject.toml:
-# [project.scripts]
-# starter = "_your_app_name_here_.starter:main"
-# Then run:
+After the end user runs `uv sync` to install dependencies and entry points:
+```bash
 uv run starter
 ```
 

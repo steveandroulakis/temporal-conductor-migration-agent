@@ -269,6 +269,44 @@ uv run starter  # Should run without warnings
 
 ---
 
+### Issue: Console Scripts Not Found (No such file or directory)
+
+**Symptom**: `OSError: [Errno 2] No such file or directory` when running `uv run worker` or `uv run starter`, despite having `[project.scripts]` defined in `pyproject.toml`.
+
+**Root Cause**: The project is missing `[tool.uv]` section with `package = true` in `pyproject.toml`. Without this, `uv sync` skips installation of entry points.
+
+**Diagnostic**: Run `uv sync` and check for this warning message:
+```
+Skipping installation of entry points (`project.scripts`) because this project is not packaged
+```
+
+**Solution**:
+
+1. Add the following section to `pyproject.toml`:
+```toml
+[tool.uv]
+package = true
+```
+
+2. Run `uv sync` again to install the package and entry points:
+```bash
+uv sync --all-extras
+```
+
+3. Verify entry points are installed:
+```bash
+uv run worker  # Should now work
+```
+
+**Prevention**:
+- ALWAYS include `[tool.uv]` with `package = true` when using `[project.scripts]`
+- Run `uv sync` after modifying `pyproject.toml`
+- Read warning messages from `uv sync` carefully - they often contain explicit fix instructions
+
+**Why this happens**: By default, uv doesn't install the project as a package unless explicitly configured. Console scripts defined in `[project.scripts]` are only installed when the project is treated as a package.
+
+---
+
 ## Quick Diagnostic Checklist
 
 If your migration is failing, check these in order:

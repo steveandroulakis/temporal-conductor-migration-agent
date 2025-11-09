@@ -11,6 +11,7 @@ This guide provides comprehensive instructions for migrating Netflix Conductor J
 
 **What this migration produces:**
 - Complete Python project with workflows, activities, and worker
+- Properly configured package with console scripts (`uv run worker`, `uv run starter`)
 - Type-safe code with mypy strict validation
 - Full documentation and setup instructions
 

@@ -246,12 +246,15 @@ jq -e '.tasks | length > 0' conductor-analysis.json
    worker = "{project_name}.worker:main"
    starter = "{project_name}.starter:main"
 
+   [tool.uv]
+   package = true
+
    [build-system]
    requires = ["setuptools>=68.0"]
    build-backend = "setuptools.build_meta"
    ```
 
-   > **Note:** The `[project.scripts]` section creates console commands. After running `uv sync`, you can run `uv run worker` or `uv run starter` instead of the longer module syntax.
+   > **CRITICAL:** The `[tool.uv]` section with `package = true` is REQUIRED for console scripts to work. Without it, entry points will not be installed and you'll get "No such file or directory" errors. The `[project.scripts]` section creates console commands that can be run with `uv run worker` or `uv run starter` after the end user runs `uv sync`.
 
 5. **Create .gitignore**
    ```
@@ -605,11 +608,9 @@ python3 -c "import sys; sys.path.insert(0, '.'); from {project_name}.workflow im
    > **Important:** The `main()` function must be synchronous (not async) to work as a console script entry point. It wraps the async function with `asyncio.run()`. If `main()` is async, you'll get "coroutine was never awaited" runtime warnings when running via console scripts.
 
    **Running the worker:**
-   ```bash
-   # Option 1: Run as module
-   uv run python -m {project_name}.worker
 
-   # Option 2: Use console script (requires [project.scripts] in pyproject.toml)
+   After the end user runs `uv sync` to install dependencies and entry points:
+   ```bash
    uv run worker
    ```
 
@@ -695,11 +696,9 @@ grep -q 'Worker(' {project_name}/worker.py
    > **Important:** The `main()` function must be synchronous (not async) to work as a console script entry point. It wraps the async function with `asyncio.run()`. If `main()` is async, you'll get "coroutine was never awaited" runtime warnings when running via console scripts.
 
    **Running the starter:**
-   ```bash
-   # Option 1: Run as module
-   uv run python -m {project_name}.starter
 
-   # Option 2: Use console script (requires [project.scripts] in pyproject.toml)
+   After the end user runs `uv sync` to install dependencies and entry points:
+   ```bash
    uv run starter
    ```
 
@@ -779,8 +778,8 @@ grep -q 'start_workflow(' {project_name}/starter.py
    uv add temporalio httpx
    uv add --dev mypy
 
-   # Sync all dependencies including dev extras
-   echo "Syncing all dependencies..."
+   # Sync all dependencies including dev extras and install entry points
+   echo "Syncing all dependencies and installing entry points..."
    uv sync --all-extras
 
    # Verify dependencies installed
@@ -797,10 +796,6 @@ grep -q 'start_workflow(' {project_name}/starter.py
    echo "Setup complete!"
    echo ""
    echo "Next steps:"
-   echo "1. Start worker: uv run python -m {project_name}.worker"
-   echo "2. Execute workflow: uv run python -m {project_name}.starter"
-   echo ""
-   echo "Or if you added [project.scripts] to pyproject.toml:"
    echo "1. Start worker: uv run worker"
    echo "2. Execute workflow: uv run starter"
    ```
@@ -863,18 +858,20 @@ test -x setup.sh
 
    1. Start the worker (in separate terminal):
       ```bash
-      uv run python -m {project_name}.worker
-      # Or: uv run worker (if using [project.scripts])
+      uv run worker
       ```
 
    2. Execute the workflow:
       ```bash
-      uv run python -m {project_name}.starter
-      # Or: uv run starter (if using [project.scripts])
+      uv run starter
       ```
 
    3. View workflow in Temporal Web UI:
       http://localhost:8233
+
+   ## Configuration
+
+   This project requires `[tool.uv]` with `package = true` in `pyproject.toml` for console scripts to work properly. This is already configured in the generated project.
 
    ## Project Structure
 
