@@ -267,6 +267,7 @@ class TimedApprovalWorkflow:
     @workflow.run
     async def run(self, request: Request) -> Result:
         # Notify human that approval is needed
+        # Note: notify_approval_needed activity must accept 1 parameter (request)
         await workflow.execute_activity(
             notify_approval_needed,
             args=[request],
@@ -286,6 +287,7 @@ class TimedApprovalWorkflow:
 
         # Process approval
         if self._approval.approved:
+            # Note: process_approval activity must accept 1 parameter (request)
             return await workflow.execute_activity(
                 process_approval,
                 args=[request],
@@ -338,6 +340,7 @@ class MultiReviewerWorkflow:
     @workflow.run
     async def run(self, request: Request) -> Result:
         # Notify all reviewers in parallel
+        # Note: notify_reviewer activity must accept 2 parameters (reviewer_id, request)
         await asyncio.gather(
             workflow.execute_activity(
                 notify_reviewer,
@@ -418,6 +421,7 @@ class ApprovalLoopWorkflow:
             workflow.logger.info(f"Approval iteration {iteration}")
 
             # Submit for review
+            # Note: submit_for_review activity must accept 2 parameters (request, iteration)
             submission = await workflow.execute_activity(
                 submit_for_review,
                 args=[request, iteration],

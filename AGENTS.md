@@ -13,6 +13,8 @@ REMEMBER: IF YOU HAVE NO INTERNET ACCESS, YOU WILL NOT BE ABLE TO GET THE `tempo
 * ✅ Use proper imports: `RetryPolicy` comes from `temporalio.common`, not `temporalio.workflow`
 * ✅ Always use type hints and follow PEP 8 style guidelines
 * ✅ The Python Temporal SDK's `execute_activity()` expects either a single positional argument (for activities with one parameter) or the `args` keyword argument for multiple arguments. Passing multiple positional arguments directly will result in a TypeError.
+* ✅ **Activity function signatures must match argument counts**: When calling `execute_activity(func, args=[a, b])`, the activity function must accept exactly 2 parameters; mismatches cause "takes X positional argument but Y were given" errors.
+* ✅ **When you encounter errors or issues**, refer to the comprehensive troubleshooting section at the end of this document for common pitfalls and their solutions.
 * ✅ **CRITICAL - Conductor Migrations**: If migrating from Netflix Conductor JSON workflow definitions, you **MUST** follow the comprehensive guides in [conductor-migration/README.md](./conductor-migration/README.md), including:
   - Cross-reference every Conductor task type with the [Primitives Reference](./conductor-migration/conductor-primitives-reference.md) before writing code
   - Implement human-in-the-loop patterns correctly using the [Human Interaction Patterns](./conductor-migration/conductor-human-interaction.md) guide if your workflow has HUMAN_TASK, WAIT, or approval loops
@@ -498,6 +500,57 @@ final_record = await workflow.execute_activity(
 ```
 
 **Why**: The Python Temporal SDK's `execute_activity()` expects either a single positional argument (for activities with one parameter) or the `args` keyword argument for multiple arguments. Passing multiple positional arguments directly will result in a TypeError.
+
+---
+
+### Issue: Activity Function Signature Mismatch
+**Symptom**: `TypeError` stating "activity_name() takes X positional argument but Y were given" even when using correct `args=[]` syntax
+
+**Cause**: The number of arguments passed in `args=[]` doesn't match the number of parameters the activity function accepts.
+
+**Example Error**:
+```python
+# Workflow code - correct syntax but wrong argument count
+self._iteration += 1
+upload_message = await workflow.execute_activity(
+    upload_schema,
+    args=[submission, self._iteration],  # Passing 2 arguments
+    schedule_to_close_timeout=timedelta(seconds=30),
+    retry_policy=DEFAULT_RETRY_POLICY,
+)
+```
+
+Error message:
+```
+Activity task failed
+upload_schema() takes 1 positional argument but 2 were given
+```
+
+**Root Cause**: The `upload_schema` activity function only accepts 1 parameter:
+```python
+# ❌ Activity accepts 1 parameter but workflow passes 2
+@activity.defn
+async def upload_schema(submission: dict) -> str:
+    # ...
+```
+
+**Fix**: Update the activity function signature to accept all arguments being passed:
+```python
+# ✓ Activity now accepts 2 parameters matching the args list
+@activity.defn
+async def upload_schema(submission: dict, iteration: int) -> str:
+    # Now can use both parameters
+    activity.logger.info(f"Uploading schema iteration {iteration}")
+    # ...
+```
+
+**Verification Checklist**:
+When calling `workflow.execute_activity()`:
+1. ✓ Using correct syntax: single arg OR `args=[...]` for multiple
+2. ✓ Activity function signature matches argument count:
+   - `args=[a, b]` → function must accept 2 parameters
+   - `args=[single]` → function must accept 1 parameter
+   - Single positional arg → function must accept 1 parameter
 
 ---
 

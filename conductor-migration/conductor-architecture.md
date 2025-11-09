@@ -41,6 +41,11 @@ This document provides a comprehensive reference for understanding the architect
 
 ## Control Flow Pattern Translation
 
+> **Note on Activity Calls**: In the examples below, `...` represents activity parameters and configuration (timeouts, retry policies, etc.). When implementing:
+> - For single argument: `activity_func, arg, start_to_close_timeout=...`
+> - For multiple arguments: `activity_func, args=[arg1, arg2], start_to_close_timeout=...`
+> - **Always ensure the activity function signature matches the number of arguments** passed (see [AGENTS.md](../AGENTS.md#issue-activity-function-signature-mismatch))
+
 ### Sequential Execution
 **Conductor:**
 ```json
