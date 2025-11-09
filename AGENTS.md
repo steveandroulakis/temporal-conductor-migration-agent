@@ -2,6 +2,8 @@
 
 **Purpose:** A focused reference guide for writing Temporal workflow code in Python, covering project structure, setup, implementation patterns, and common coding pitfalls.
 
+REMEMBER: IF YOU HAVE NO INTERNET ACCESS, YOU WILL NOT BE ABLE TO GET THE `temporalio` DEPENDENCY, THEREFORE YOU WON'T BE ABLE TO RUN PYTHON WORKFLOWS OR ACTIVITIES.
+
 ---
 
 ## 0) Golden Rules (Do Not Skip)
@@ -10,6 +12,7 @@
 * ✅ Follow the workflow sandbox rules strictly: import specific activity functions by name, never import entire activity modules
 * ✅ Use proper imports: `RetryPolicy` comes from `temporalio.common`, not `temporalio.workflow`
 * ✅ Always use type hints and follow PEP 8 style guidelines
+* ✅ The Python Temporal SDK's `execute_activity()` expects either a single positional argument (for activities with one parameter) or the `args` keyword argument for multiple arguments. Passing multiple positional arguments directly will result in a TypeError.
 * ✅ **CRITICAL - Conductor Migrations**: If migrating from Netflix Conductor JSON workflow definitions, you **MUST** follow the comprehensive guides in [conductor-migration/README.md](./conductor-migration/README.md), including:
   - Cross-reference every Conductor task type with the [Primitives Reference](./conductor-migration/conductor-primitives-reference.md) before writing code
   - Implement human-in-the-loop patterns correctly using the [Human Interaction Patterns](./conductor-migration/conductor-human-interaction.md) guide if your workflow has HUMAN_TASK, WAIT, or approval loops
@@ -455,6 +458,46 @@ retry_policy = workflow.RetryPolicy(...)  # ❌
 ```python
 from temporalio.common import RetryPolicy  # ✓
 ```
+
+---
+
+### Issue: Multiple Arguments to execute_activity
+**Symptom**: `TypeError` when calling `workflow.execute_activity()` with multiple positional arguments
+
+**Cause**: The `execute_activity()` function does not accept multiple positional arguments after the activity function reference.
+
+**Wrong**:
+```python
+# ❌ Multiple positional arguments
+final_record = await workflow.execute_activity(
+    complete_review,
+    submission,
+    decisions,
+    True,
+    schedule_to_close_timeout=timedelta(seconds=20),
+    retry_policy=default_retry_policy,
+)
+```
+
+**Correct**:
+```python
+# ✓ Single argument passed directly
+result = await workflow.execute_activity(
+    single_arg_activity,
+    my_input,
+    schedule_to_close_timeout=timedelta(seconds=20),
+)
+
+# ✓ Multiple arguments via args keyword
+final_record = await workflow.execute_activity(
+    complete_review,
+    args=[submission, decisions, True],
+    schedule_to_close_timeout=timedelta(seconds=20),
+    retry_policy=default_retry_policy,
+)
+```
+
+**Why**: The Python Temporal SDK's `execute_activity()` expects either a single positional argument (for activities with one parameter) or the `args` keyword argument for multiple arguments. Passing multiple positional arguments directly will result in a TypeError.
 
 ---
 

@@ -23,7 +23,7 @@ For experienced users who understand both Conductor and Temporal:
 
 1. **Ensure prerequisites**: Python 3.11+, UV, jq
 2. **Validate Conductor JSON**: `jq empty workflow.json`
-3. **⚠️ CRITICAL - Before writing code**: Cross-reference your Conductor JSON with [Primitives Reference](./conductor-primitives-reference.md). If HUMAN_TASK/WAIT/approvals exist, read [Human Interaction Patterns](./conductor-human-interaction.md)
+3. **⚠️ CRITICAL - Before writing code**: Understand the Conductor use case by carefully examining the JSON file. Cross-reference your Conductor JSON with [Primitives Reference](./conductor-primitives-reference.md). If HUMAN_TASK/WAIT/approvals exist, read [Human Interaction Patterns](./conductor-human-interaction.md). IF THE CONDUCTOR JSON HAS WORKFLOW WAITS, AND INTERACTIVITY THEN THE TEMPORAL WORKFLOW CODE WILL NEED SIGNALS OR UPDATES AND WAITS TOO.
 4. **Follow migration phases**: Analyze → Generate → Validate
 5. **Key mappings**: SIMPLE→Activity, FORK_JOIN→asyncio.gather, SWITCH→if/elif, DO_WHILE→while, HUMAN_TASK→Update/Signal
 6. **Run end-to-end**: Start dev server → Start worker → Execute workflow → Validate
