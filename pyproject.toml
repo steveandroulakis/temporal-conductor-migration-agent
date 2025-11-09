@@ -1,0 +1,25 @@
+[project]
+name = "schema-approval"
+version = "0.1.0"
+description = "Temporal workflow migrated from Netflix Conductor schema approval example"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "temporalio>=1.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.7.0",
+]
+
+[project.scripts]
+worker = "schema_approval.worker:main"
+starter = "schema_approval.starter:main"
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"

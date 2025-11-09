@@ -1,0 +1,104 @@
+{
+  "analysis_date": "2024-04-01T00:00:00Z",
+  "conductor_file": "conductor-definition/EXAMPLE_review_approval.json",
+  "workflow_metadata": {
+    "name": "schema_approval",
+    "version": 1,
+    "schema_version": 2,
+    "restartable": true,
+    "timeout_policy": "ALERT_ONLY"
+  },
+  "project_config": {
+    "project_name": "SchemaApproval",
+    "project_name_snake": "schema_approval",
+    "task_queue": "schema-approval-task-queue"
+  },
+  "tasks": [
+    {
+      "name": "repeat_until_approved",
+      "type": "DO_WHILE",
+      "details": "Loop until workflow variable approved is true.",
+      "loop_condition": "if ($.approved) { false;} else { true;}"
+    },
+    {
+      "name": "upload_schema",
+      "type": "SIMPLE",
+      "details": "Collect or upload schema changes for the current iteration."
+    },
+    {
+      "name": "my_fork_join_ref",
+      "type": "FORK_JOIN",
+      "details": "Run Review1.a and Review1.b in parallel."
+    },
+    {
+      "name": "Review1.a",
+      "type": "SIMPLE",
+      "details": "First reviewer in the primary review stage."
+    },
+    {
+      "name": "Review1.b",
+      "type": "SIMPLE",
+      "details": "Second reviewer in the primary review stage."
+    },
+    {
+      "name": "notification_join_ref",
+      "type": "JOIN",
+      "details": "Join for Review1.a and Review1.b before switch."
+    },
+    {
+      "name": "Review1Check",
+      "type": "SWITCH",
+      "details": "Check if both Review1 approvals were granted.",
+      "decision_cases": ["YES", "NO"]
+    },
+    {
+      "name": "Review2",
+      "type": "SIMPLE",
+      "details": "Secondary review, may skip Review3."
+    },
+    {
+      "name": "Review2Check",
+      "type": "SWITCH",
+      "details": "Determine whether Review3 is required based on Review2."
+    },
+    {
+      "name": "Review3",
+      "type": "SIMPLE",
+      "details": "Tertiary review if Review2 requires it."
+    },
+    {
+      "name": "Review3Check",
+      "type": "SWITCH",
+      "details": "Confirm Review3 decision before completion."
+    },
+    {
+      "name": "CompleteReview_1",
+      "type": "SIMPLE",
+      "details": "Complete review when Review3 is skipped."
+    },
+    {
+      "name": "CompleteReview_2",
+      "type": "SIMPLE",
+      "details": "Complete review after Review3 approval."
+    }
+  ],
+  "control_flow_patterns": {
+    "loop": "DO_WHILE loop that repeats until approved variable is set to true.",
+    "parallel": "FORK_JOIN for Review1.a and Review1.b followed by JOIN.",
+    "conditional": "SWITCH tasks gate later review stages and determine completion path."
+  },
+  "data_flow": {
+    "workflow_variables": ["approved"],
+    "approvals": "Review results feed into switch cases using user_action.output.approved placeholder.",
+    "loop_state": "Loop condition depends on approval outcome of each iteration."
+  },
+  "external_interactions": {
+    "human_interaction": "Implied by approval checks; to be implemented with activities producing review decisions."
+  },
+  "translation_notes": [
+    "Convert DO_WHILE loop into Python while loop that evaluates approval flag.",
+    "Represent parallel Review1 tasks using Temporal parallel activity execution.",
+    "Model SWITCH logic with conditional branches in workflow code.",
+    "Combine CompleteReview tasks into a single activity with contextual parameters."
+  ]
+}
