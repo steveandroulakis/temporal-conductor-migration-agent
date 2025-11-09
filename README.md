@@ -31,8 +31,8 @@ The goal of this repository is to provide a structured environment where AI codi
 
 Add your repository to one of these AI coding platforms:
 
-- **[Codex](https://codex.com)** - Web-based AI coding assistant
-- **[Claude Code](https://claude.ai/code)** - Anthropic's AI coding tool
+- **[Codex](https://openai.com/codex)** - OpenAI's AI coding assistant
+- **[Claude Code](https://openai.com/codex)** - Anthropic's AI coding tool
 - **GitHub Copilot Workspace** - GitHub's AI development environment
 - Any other web-based code writing agent that can access repositories
 
