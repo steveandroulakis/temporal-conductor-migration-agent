@@ -1,131 +1,135 @@
-# Temporal Conductor Migration Agent Template
+# Schema Approval Temporal Workflow
 
-This template repository helps you migrate Netflix Conductor workflows to the Temporal Python SDK using AI coding agents like Codex, Claude Code, or other web-based code writing tools.
+This project contains a Temporal Python implementation of the `schema_approval` workflow
+originally defined with Netflix Conductor. The code follows the migration
+requirements documented in [`conductor-migration/`](./conductor-migration/) and
+recreates the same control flow, including the human approval loop, using the
+Temporal Python SDK.
 
-## Purpose
+## Overview
 
-The goal of this repository is to provide a structured environment where AI coding agents can automatically convert a Netflix Conductor workflow definition (JSON) into a working Temporal Python application.
+* **Workflow goal** – manage iterative review of a schema definition until it is
+  approved.
+* **Key features** – `DO_WHILE` approval loop, parallel reviewer notifications,
+  conditional escalation, and human-in-the-loop decisions delivered via Temporal
+  workflow updates.
+* **Temporal task queue** – `schema-approval-task-queue`.
 
-**Key Features:**
-- Uses AI agents to generate production-ready Temporal Python code
-- Includes comprehensive migration guides and best practices
-- Supports complex workflow patterns (loops, conditionals, parallel execution, human-in-the-loop)
-- No internet access required - agents work entirely from local documentation
-- Supports Temporal Python SDK only
-
-## How to Use This Template
-
-### Step 1: Create Your Repository
-
-1. Click the **"Use this template"** button at the top of this repository
-2. Give your new repository a name (e.g., `migrate-my-workflow`)
-3. Clone your new repository locally
-
-### Step 2: Add Your Conductor Workflow
-
-1. Place your Conductor workflow JSON file in the `./conductor-definition/` directory
-2. You can replace the example file (`EXAMPLE_review_approval.json`) or add your own alongside it
-3. Commit and push your changes
-
-### Step 3: Use an AI Coding Agent
-
-Add your repository to one of these AI coding platforms:
-
-- **[Codex](https://openai.com/codex)** - OpenAI's AI coding assistant
-- **[Claude Code](https://openai.com/codex)** - Anthropic's AI coding tool
-- **GitHub Copilot Workspace** - GitHub's AI development environment
-- Any other web-based code writing agent that can access repositories
-
-### Step 4: Prompt the Agent
-
-Once your repository is loaded in the AI agent, use this prompt:
+## Project Layout
 
 ```
-Your goal is to create a Temporal Python SDK version of the Conductor workflow
-in this repo (found inside `./conductor-definition`). There is a guide linked
-from AGENTS.md as well as a Conductor migration guide in the conductor-migration/
-directory. Please follow the migration guide carefully and create a complete,
-working Temporal application.
+schema_approval/
+  __init__.py
+  activities.py
+  shared.py
+  starter.py
+  worker.py
+  workflow.py
+pyproject.toml
+README.md
 ```
 
-The agent will:
-- Analyze your Conductor workflow JSON
-- Read the migration guides in `conductor-migration/`
-- Follow the instructions in `AGENTS.md`
-- Generate Python code for activities, workflows, workers, and starters
-- Create proper project structure with dependencies
-- Handle complex patterns like human-in-the-loop, loops, and parallel execution
+* `shared.py` – dataclasses shared by workflows, activities, workers, and clients.
+* `activities.py` – upload, notification, auditing, and completion activities.
+* `workflow.py` – the Temporal workflow implementation with update and query handlers.
+* `worker.py` – worker entry point registered as a console script (`uv run worker`).
+* `starter.py` – helper script that starts the workflow and drives review updates.
 
-### Step 5: Review and Test
+## Mapping from Conductor to Temporal
 
-The AI agent will typically create a Pull Request with the generated code. To fetch and review:
+| Conductor primitive | Temporal translation |
+| ------------------- | -------------------- |
+| `DO_WHILE` loop | `while` loop in workflow with iteration counter |
+| `SIMPLE` tasks (`upload_schema`, `ReviewX`, `CompleteReview`) | Activities (`upload_schema`, `notify_reviewer`, `record_decision`, `complete_review`) |
+| `FORK_JOIN` (`Review1.a` / `Review1.b`) | `asyncio.gather` awaiting multiple `_await_decision` coroutines |
+| `JOIN` (`notification_join`) | implicit in `asyncio.gather` waiting for both reviewers |
+| `SWITCH` tasks (`Review1Check`, `Review2Check`, `Review3Check`) | `if` / `else` branches based on collected `ReviewDecision` values |
+| Human approval inputs (`${user_action.output.approved}`) | Workflow update handler `submit_review_decision` that validates and records reviewer updates |
+
+## Prerequisites
+
+* Python **3.11+**
+* [uv](https://docs.astral.sh/uv/) package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+* Temporal server running at `localhost:7233` (for local testing you can use
+  [Temporalite](https://docs.temporal.io/temporalite)).
+
+## Installation
 
 ```bash
-# Clone your repository if you haven't already
-git clone https://github.com/<your-username>/<your-repo-name>.git
-cd <your-repo-name>
-
-# Fetch the PR created by the agent (example branch name)
-git fetch origin codex/create-temporal-python-sdk-for-conductor-workflow
-git checkout codex/create-temporal-python-sdk-for-conductor-workflow
-
-# Review the generated code
-# The agent should have created:
-# - activities.py (activity definitions)
-# - workflows.py (workflow logic)
-# - worker.py (worker configuration)
-# - starter.py (workflow starter)
-# - pyproject.toml (dependencies)
+uv sync
 ```
 
-## What's Included
+This command installs the project as a package, exposes the console scripts, and
+fetches the Temporal Python SDK dependency.
 
-- **`AGENTS.md`** - Comprehensive instructions for AI agents performing the migration
-- **`conductor-definition/`** - Directory for your Conductor workflow JSON files
-  - `EXAMPLE_review_approval.json` - Example complex workflow demonstrating approval loops, parallel reviews, and human interaction
-- **`conductor-migration/`** - Complete migration guide documentation
-  - `README.md` - Migration guide entry point
-  - `conductor-migration-guide.md` - 8-phase migration process
-  - `conductor-primitives-reference.md` - Detailed Conductor→Temporal mappings
-  - `conductor-human-interaction.md` - Human-in-the-loop patterns
-  - `conductor-architecture.md` - Architecture comparison
-  - `conductor-quality-assurance.md` - QA standards
-  - `conductor-troubleshooting.md` - Common issues and solutions
+## Running the Sample
 
-## Important Notes
+1. **Start the Temporal worker**
+   ```bash
+   uv run worker
+   ```
 
-- **Python SDK Only**: This template supports Temporal Python SDK migrations only
-- **No Internet Required**: The repository is self-contained. AI agents can complete the migration using only the documentation provided in this repo
-- **No Execution**: This template focuses on code generation. The generated code is not executed in the repository - you'll need to test it in your own Temporal environment
-- **Complex Workflows Supported**: The migration guides handle advanced patterns including:
-  - DO_WHILE loops → Python while loops
-  - FORK_JOIN → asyncio.gather for parallel execution
-  - SWITCH statements → if/elif/else conditionals
-  - HUMAN_TASK → Temporal Updates or Signals
-  - WAIT → workflow.sleep
-  - Dynamic forks and conditional branching
+2. **Run one of the starter scenarios**
+   ```bash
+   uv run starter --scenario single-pass
+   ```
 
-## Example Workflows
+   The starter creates a workflow run and supplies human review decisions through
+   the `submit_review_decision` update. Available scenarios:
 
-The included `EXAMPLE_review_approval.json` demonstrates:
-- Multi-stage approval process
-- DO_WHILE loop for retry-until-approved pattern
-- Parallel review branches (FORK_JOIN)
-- Nested SWITCH statements for complex conditional logic
-- Human interaction points for approval gathering
+   * `single-pass` – all reviewers approve during the first iteration.
+   * `escalation` – first iteration fails (no final approval), second iteration
+     escalates to the executive reviewer before approval is granted.
 
-## Support and Documentation
+The starter prints the `SchemaApprovalResult` returned by the workflow, including
+how many iterations were required and the decision summaries.
 
-For detailed migration guidance, AI agents should:
-1. Start with `AGENTS.md` for overall instructions
-2. Follow `conductor-migration/README.md` for the migration process
-3. Reference `conductor-primitives-reference.md` for specific task type mappings
-4. Use `conductor-human-interaction.md` for workflows requiring human input
+## Interacting Manually
 
-## Contributing
+The workflow exposes:
 
-If you find issues with the migration guides or have suggestions for improvements, please open an issue in the original template repository.
+* **Update** – `submit_review_decision(ReviewDecision)` records a reviewer’s decision
+  and immediately validates that a matching review task is pending.
+* **Queries** – `pending_reviews()` returns currently waiting review IDs,
+  `iteration()` reports the current iteration number.
 
-## License
+To submit decisions manually (for example from a Python REPL):
 
-This template is provided as-is for educational and development purposes.
+```python
+import asyncio
+from temporalio.client import Client
+from schema_approval.shared import ReviewDecision
+
+async def main() -> None:
+    client = await Client.connect("localhost:7233")
+    handle = client.get_workflow_handle(workflow_id="<your-workflow-id>")
+    await handle.execute_update(
+        "submit_review_decision",
+        ReviewDecision(review_id="review1.a:iter-1", approved=True),
+    )
+
+asyncio.run(main())
+```
+
+## Validation and Quality Checks
+
+* **Syntax** – `python -m py_compile schema_approval/*.py`
+* **Type checking** – `uv run mypy schema_approval/`
+* **Linting** – `uv run ruff check schema_approval/`
+
+These commands ensure the migrated workflow matches the quality criteria defined
+in `conductor-migration/conductor-quality-assurance.md`.
+
+## Troubleshooting
+
+* If the worker fails with a sandbox error, verify that `workflow.py` imports
+  activities by symbol (`from .activities import ...`) instead of importing the
+  entire module.
+* Update submissions must reference pending review IDs. Use the `pending_reviews`
+  query to list active review tasks when scripting manual approval flows.
+
+For additional guidance consult:
+
+* [`conductor-migration/conductor-primitives-reference.md`](./conductor-migration/conductor-primitives-reference.md)
+* [`conductor-migration/conductor-human-interaction.md`](./conductor-migration/conductor-human-interaction.md)
+* [`conductor-migration/conductor-troubleshooting.md`](./conductor-migration/conductor-troubleshooting.md)
