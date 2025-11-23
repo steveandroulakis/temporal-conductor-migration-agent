@@ -18,7 +18,7 @@ You will autonomously:
   - Project structure explanation
   - How to run the worker
   - How to run the starter
-  - How to interact with workflow (if human interaction present)
+  - **CRITICAL: How to interact with workflow using interact.py (Signals/Updates/Queries)**
   - Configuration options
   - Troubleshooting section
 - Generate `CONDUCTOR_COMPARISON.md`:
@@ -216,7 +216,8 @@ Navigate to your workflow to see:
 │   ├── activities.py            # Activity implementations
 │   ├── workflow.py              # Workflow definition
 │   ├── worker.py                # Worker registration
-│   └── starter.py               # Workflow starter
+│   ├── starter.py               # Workflow starter
+│   └── interact.py              # Workflow interaction client (Signals/Updates/Queries)
 ├── pyproject.toml               # Project configuration
 ├── setup.sh                     # Automated setup script
 ├── README.md                    # This file
@@ -232,37 +233,121 @@ Navigate to your workflow to see:
 - **workflow.py**: Workflow orchestration with control flow logic
 - **worker.py**: Worker process that executes workflows and activities
 - **starter.py**: Client for starting workflow executions
+- **interact.py**: **Client for interacting with running workflows (Updates, Signals, Queries)**
 
-{If human interaction patterns:}
-## Human Interaction
+{If ANY Update/Signal/Query handlers exist:}
+## Interacting with Running Workflows
 
-This workflow includes human interaction points:
+**IMPORTANT**: This workflow has {N} Update handlers, {M} Signal handlers, and {P} Query handlers. You **must** use the `interact.py` client to interact with running workflows.
 
-{For each human_interaction_pattern:}
-### {pattern description}
-- **Type**: {pattern_type}
-- **Mechanism**: {signal or update}
-- **Task**: {task_reference}
+The `interact.py` script provides a command-line interface for:
+- **Updates**: Send validated decisions/approvals that return immediate feedback
+- **Signals**: Send notifications or state changes to the workflow
+- **Queries**: Check workflow status without modifying state
 
-To send approval/input:
-```python
-from temporalio.client import Client
-from {package}.shared import {DecisionDataclass}
+### Using the Interaction Client
 
-client = await Client.connect("localhost:7233")
-handle = client.get_workflow_handle(workflow_id)
+**Get workflow ID** from starter output or Web UI, then:
 
-# Send decision
-await handle.execute_update(
-    "{update_handler_name}",
-    {DecisionDataclass}(
-        reviewer_id="user@example.com",
-        approved=True
-    )
-)
+```bash
+# Send an Update
+uv run interact update <workflow-id> <update-name> '<json-args>'
+
+# Send a Signal
+uv run interact signal <workflow-id> <signal-name> '<json-args>'
+
+# Execute a Query
+uv run interact query <workflow-id> <query-name>
+
+# See all available commands
+uv run interact
 ```
 
-{End for each pattern}
+### Available Interactions
+
+{For each Update handler found in workflow.py:}
+#### Update: `{update_handler_name}`
+**Purpose**: {Extract from docstring or infer from name}
+**Input**: `{InputDataclass}` with fields: {list fields}
+
+**Example**:
+```bash
+uv run interact update schema-approval-abc123 {update_handler_name} '{
+  "field1": "value1",
+  "field2": true
+}'
+```
+
+**Python equivalent**:
+```python
+from temporalio.client import Client
+from {package}.shared import {InputDataclass}
+
+client = await Client.connect("localhost:7233")
+handle = client.get_workflow_handle("schema-approval-abc123")
+
+result = await handle.execute_update(
+    {WorkflowClassName}.{update_handler_name},
+    {InputDataclass}(field1="value1", field2=True)
+)
+print(f"Result: {result}")
+```
+
+{End for each Update}
+
+{For each Signal handler found in workflow.py:}
+#### Signal: `{signal_handler_name}`
+**Purpose**: {Extract from docstring or infer from name}
+**Input**: `{InputDataclass}` with fields: {list fields}
+
+**Example**:
+```bash
+uv run interact signal schema-approval-abc123 {signal_handler_name} '{
+  "field1": "value1"
+}'
+```
+
+{End for each Signal}
+
+{For each Query handler found in workflow.py:}
+#### Query: `{query_handler_name}`
+**Purpose**: {Extract from docstring or infer from name}
+**Returns**: {return type}
+
+**Example**:
+```bash
+uv run interact query schema-approval-abc123 {query_handler_name}
+```
+
+{End for each Query}
+
+### Complete Workflow Example
+
+```bash
+# Terminal 1: Start worker
+uv run worker
+
+# Terminal 2: Start workflow
+uv run starter
+# Note the workflow ID from output: schema-approval-abc123
+
+# Terminal 3: Monitor in Web UI
+open http://localhost:8233/namespaces/default/workflows/schema-approval-abc123
+
+# Terminal 4: Interact with workflow
+# {Provide actual workflow-specific interaction sequence}
+# Example: Send approval decisions
+uv run interact update schema-approval-abc123 submit_review1_approval '{
+  "reviewer_id": "user@example.com",
+  "decision": "YES",
+  "comments": "Looks good!"
+}'
+
+# Check status
+uv run interact query schema-approval-abc123 get_approval_status
+```
+
+{End if ANY handlers exist}
 
 ## Configuration
 

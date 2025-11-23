@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document specifies a **7-agent sequential pipeline** for converting Netflix Conductor workflows to Temporal Python SDK applications. Each agent operates with high autonomy, performing a distinct phase of the migration process.
+This document specifies an **8-agent sequential pipeline** for converting Netflix Conductor workflows to Temporal Python SDK applications. Each agent operates with high autonomy, performing a distinct phase of the migration process.
 
 ## Architecture Principles
 
@@ -52,7 +52,7 @@ This document specifies a **7-agent sequential pipeline** for converting Netflix
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ 5. Infrastructure Generator                                             │
 │    Input:  conductor-analysis.json, workflow.py, activities.py          │
-│    Output: worker.py, starter.py                                        │
+│    Output: worker.py, starter.py, interact.py                           │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -64,8 +64,15 @@ This document specifies a **7-agent sequential pipeline** for converting Netflix
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
+│ 6.5 Workflow Executor (NEW)                                             │
+│    Input:  All generated files, conductor-analysis.json                 │
+│    Output: WORKFLOW_EXECUTION_REPORT.md, execution validation           │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
 │ 7. Documentation Generator                                              │
-│    Input:  All files, conductor-analysis.json                           │
+│    Input:  All files, conductor-analysis.json, execution report         │
 │    Output: README.md, comparison docs, setup.sh                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -456,6 +463,75 @@ model: inherit
 
 ---
 
+### 6.5 Workflow Executor
+
+**Filename**: `subagents/workflow-executor.md`
+
+**Agent Configuration**:
+```yaml
+name: workflow-executor
+description: Executes and validates the generated workflow end-to-end. Invoked after code-validator, before documentation-generator.
+tools: Read, Write, Bash
+model: inherit
+```
+
+**Responsibilities**:
+- Check if Temporal server is running (ports 7233/8233), start if needed
+- Install dependencies via `uv sync`
+- Analyze workflow type (simple vs. interactive with handlers)
+- Execute end-to-end test:
+  - Start worker process in background
+  - Execute workflow via starter
+  - For simple workflows: Wait for COMPLETED status (30-60s timeout)
+  - For interactive workflows: Send test interactions via `uv run interact`, verify responses
+- Validate execution using Temporal CLI commands (`temporal workflow show`)
+- Handle failures autonomously:
+  - Parse error logs (worker.log, starter.log)
+  - Identify error types (imports, sandbox violations, activity failures)
+  - Invoke other agents to fix issues (code-validator, infrastructure-generator)
+  - Retry execution up to 3 times with fixes applied
+- Cleanup processes and PID files
+- Generate comprehensive `WORKFLOW_EXECUTION_REPORT.md`
+
+**Input**:
+- `conductor-analysis.json`
+- All files in `{workflow_name}_temporal/` directory
+- `pyproject.toml`
+- `VALIDATION_REPORT.md`
+
+**Output**:
+- `WORKFLOW_EXECUTION_REPORT.md` with:
+  - Execution summary (PASS/FAIL)
+  - Workflow ID and Web UI link
+  - Worker and starter logs
+  - Validation results
+  - Any errors and fixes applied
+  - Temporal CLI commands used
+
+**Documentation References**:
+- `tmp-workflow-running-guide.md` (ALL sections - server, worker, workflows, interactions, troubleshooting)
+- `conductor-migration/conductor-troubleshooting.md` (runtime errors)
+- `AGENTS.md` (understanding generated code structure)
+
+**Success Criteria**:
+- Temporal server is running
+- Worker starts without errors
+- Workflow executes without immediate failures
+- For simple workflows: Reaches COMPLETED status
+- For interactive workflows: Reaches RUNNING state, responds to test interactions
+- No workflow task failures in execution history
+- Worker logs show no crashes or critical errors
+- Execution report documents all results
+
+**Critical Considerations**:
+- This agent **proves the workflow works** before documentation claims it does
+- Uses autonomous fix-and-retry strategy (up to 3 rounds)
+- Distinguishes between simple and interactive workflows for different success criteria
+- Manages Temporal server, worker lifecycle, and cleanup
+- Can invoke other agents (code-validator, infrastructure-generator) to fix runtime issues
+
+---
+
 ### 7. Documentation Generator
 
 **Filename**: `subagents/documentation-generator.md`
@@ -534,7 +610,7 @@ This structured document serves as the primary communication medium between agen
 
 **Usage**:
 - **Agent 1** (Analyzer): Writes this file
-- **Agents 2-7**: Read this file for context and requirements
+- **Agents 2-7 (plus 6.5)**: Read this file for context and requirements
 - **Main Agent**: Can inspect this file to track pipeline progress
 
 ---
@@ -552,6 +628,7 @@ subagents/
 ├── workflow-generator.md
 ├── infrastructure-generator.md
 ├── code-validator.md
+├── workflow-executor.md
 └── documentation-generator.md
 ```
 
@@ -628,18 +705,22 @@ main_agent:
   7. Invoke workflow-generator sub-agent
   8. Wait for workflow.py
   9. Invoke infrastructure-generator sub-agent
-  10. Wait for worker.py and starter.py
+  10. Wait for worker.py, starter.py, and interact.py
   11. Invoke code-validator sub-agent
   12. If validation FAILS: halt and report errors
-  13. If validation PASSES: invoke documentation-generator
-  14. Report completion to user with summary
+  13. If validation PASSES: invoke workflow-executor sub-agent
+  14. Wait for execution results and WORKFLOW_EXECUTION_REPORT.md
+  15. If execution FAILS: review errors, possibly re-run validator or other agents
+  16. If execution PASSES: invoke documentation-generator
+  17. Report completion to user with summary including execution results
 ```
 
 ### Error Handling
 
 - **Agent 1-5** (Generators): If cannot proceed, write error to `MIGRATION_ERRORS.md` and halt
 - **Agent 6** (Validator): Autonomously fix errors, re-validate, report unfixable errors
-- **Agent 7** (Documentation): Always runs if validator passes
+- **Agent 6.5** (Executor): Autonomously fix runtime errors, retry execution, report if unfixable
+- **Agent 7** (Documentation): Always runs if executor passes (or if user decides to proceed despite execution failures)
 
 ### Context Window Management
 

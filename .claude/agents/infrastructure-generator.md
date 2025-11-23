@@ -39,12 +39,14 @@ You will read:
 - **`{project_name_snake}_temporal/shared.py`** - For input dataclass structure
 - **`{project_name_snake}_temporal/worker.py`** - Placeholder to populate
 - **`{project_name_snake}_temporal/starter.py`** - Placeholder to populate
+- **`{project_name_snake}_temporal/interact.py`** - Placeholder to populate
 
 ## Outputs
 
 You will create:
 - **Complete `{project_name_snake}_temporal/worker.py`** - Worker registration and execution
 - **Complete `{project_name_snake}_temporal/starter.py`** - Workflow starter client
+- **Complete `{project_name_snake}_temporal/interact.py`** - Workflow interaction client (Signals, Updates, Queries)
 
 ## Documentation to Reference
 
@@ -316,7 +318,249 @@ if __name__ == "__main__":
 5. **Error handling** - Proper exception handling with exit codes
 6. **User-friendly output** - Clear messages about workflow progress
 
-### Step 4: Generate Example Input Data
+### Step 4: Generate interact.py (Workflow Interaction Client)
+
+**CRITICAL**: This file is essential for workflows with human interaction (Signals, Updates, Queries). Without it, users cannot interact with running workflows.
+
+Read `workflow.py` to identify:
+- All Update handlers (search for `@workflow.update`)
+- All Signal handlers (search for `@workflow.signal`)
+- All Query handlers (search for `@workflow.query`)
+
+If ANY handlers are found, generate `interact.py`:
+
+```python
+"""Workflow interaction client.
+
+This client allows you to interact with running workflows:
+- Send Updates (for human approvals, decisions with validation)
+- Send Signals (for notifications, state changes)
+- Execute Queries (for checking workflow status)
+
+Usage:
+    # Send an Update
+    uv run interact update <workflow-id> <update-name> <json-args>
+
+    # Send a Signal
+    uv run interact signal <workflow-id> <signal-name> <json-args>
+
+    # Execute a Query
+    uv run interact query <workflow-id> <query-name>
+
+Examples:
+    {Generate actual examples based on detected handlers}
+"""
+import asyncio
+import json
+import sys
+from typing import Any
+from temporalio.client import Client
+
+from .workflow import {WorkflowClassName}
+from .shared import {list all decision/input dataclasses used by handlers}
+
+
+async def send_update(
+    workflow_id: str,
+    update_name: str,
+    args: dict[str, Any]
+) -> None:
+    """Send an Update to a running workflow."""
+    client = await Client.connect("localhost:7233")
+    handle = client.get_workflow_handle(workflow_id)
+
+    print(f"Sending Update '{update_name}' to workflow {workflow_id}")
+    print(f"Arguments: {json.dumps(args, indent=2)}")
+
+    try:
+        {For each Update handler, generate helper that constructs dataclass}
+        if update_name == "{update_handler_name}":
+            decision = {DecisionDataclass}(**args)
+            result = await handle.execute_update(
+                {WorkflowClassName}.{update_handler_name},
+                decision
+            )
+            print(f"\n✓ Update accepted!")
+            print(f"Result: {result}")
+        {Repeat for all Update handlers}
+        else:
+            print(f"❌ Unknown update: {update_name}", file=sys.stderr)
+            print(f"Available updates: {list_all_update_names}", file=sys.stderr)
+            sys.exit(1)
+
+    except Exception as e:
+        print(f"❌ Update failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+async def send_signal(
+    workflow_id: str,
+    signal_name: str,
+    args: dict[str, Any]
+) -> None:
+    """Send a Signal to a running workflow."""
+    client = await Client.connect("localhost:7233")
+    handle = client.get_workflow_handle(workflow_id)
+
+    print(f"Sending Signal '{signal_name}' to workflow {workflow_id}")
+    print(f"Arguments: {json.dumps(args, indent=2)}")
+
+    try:
+        {For each Signal handler, generate helper}
+        if signal_name == "{signal_handler_name}":
+            signal_data = {SignalDataclass}(**args)
+            await handle.signal(
+                {WorkflowClassName}.{signal_handler_name},
+                signal_data
+            )
+            print(f"\n✓ Signal sent!")
+        {Repeat for all Signal handlers}
+        else:
+            print(f"❌ Unknown signal: {signal_name}", file=sys.stderr)
+            print(f"Available signals: {list_all_signal_names}", file=sys.stderr)
+            sys.exit(1)
+
+    except Exception as e:
+        print(f"❌ Signal failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+async def execute_query(
+    workflow_id: str,
+    query_name: str
+) -> None:
+    """Execute a Query on a running workflow."""
+    client = await Client.connect("localhost:7233")
+    handle = client.get_workflow_handle(workflow_id)
+
+    print(f"Executing Query '{query_name}' on workflow {workflow_id}")
+
+    try:
+        {For each Query handler, generate helper}
+        if query_name == "{query_handler_name}":
+            result = await handle.query(
+                {WorkflowClassName}.{query_handler_name}
+            )
+            print(f"\n✓ Query result:")
+            print(json.dumps(result, indent=2, default=str))
+        {Repeat for all Query handlers}
+        else:
+            print(f"❌ Unknown query: {query_name}", file=sys.stderr)
+            print(f"Available queries: {list_all_query_names}", file=sys.stderr)
+            sys.exit(1)
+
+    except Exception as e:
+        print(f"❌ Query failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def print_usage() -> None:
+    """Print usage instructions."""
+    print("Usage: uv run interact <command> <workflow-id> [args...]")
+    print("")
+    print("Commands:")
+    print("  update <workflow-id> <update-name> <json-args>")
+    print("  signal <workflow-id> <signal-name> <json-args>")
+    print("  query <workflow-id> <query-name>")
+    print("")
+    print("Available Updates:")
+    {For each Update, print example}
+    print("  {update_name}:")
+    print("    uv run interact update <wf-id> {update_name} '{example_json}'")
+    print("")
+    print("Available Signals:")
+    {For each Signal, print example}
+    print("  {signal_name}:")
+    print("    uv run interact signal <wf-id> {signal_name} '{example_json}'")
+    print("")
+    print("Available Queries:")
+    {For each Query, print example}
+    print("  {query_name}:")
+    print("    uv run interact query <wf-id> {query_name}")
+
+
+def main() -> None:
+    """Console script entry point."""
+    if len(sys.argv) < 3:
+        print_usage()
+        sys.exit(1)
+
+    command = sys.argv[1].lower()
+    workflow_id = sys.argv[2]
+
+    try:
+        if command == "update":
+            if len(sys.argv) < 5:
+                print("Error: Update requires update-name and json-args", file=sys.stderr)
+                print_usage()
+                sys.exit(1)
+            update_name = sys.argv[3]
+            args = json.loads(sys.argv[4])
+            asyncio.run(send_update(workflow_id, update_name, args))
+
+        elif command == "signal":
+            if len(sys.argv) < 5:
+                print("Error: Signal requires signal-name and json-args", file=sys.stderr)
+                print_usage()
+                sys.exit(1)
+            signal_name = sys.argv[3]
+            args = json.loads(sys.argv[4])
+            asyncio.run(send_signal(workflow_id, signal_name, args))
+
+        elif command == "query":
+            if len(sys.argv) < 4:
+                print("Error: Query requires query-name", file=sys.stderr)
+                print_usage()
+                sys.exit(1)
+            query_name = sys.argv[3]
+            asyncio.run(execute_query(workflow_id, query_name))
+
+        else:
+            print(f"Error: Unknown command '{command}'", file=sys.stderr)
+            print_usage()
+            sys.exit(1)
+
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nInterrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+**Add console script to pyproject.toml**:
+The project-scaffolder should have created this entry, but verify:
+```toml
+[project.scripts]
+worker = "{package}.worker:main"
+starter = "{package}.starter:main"
+interact = "{package}.interact:main"  # Add this line
+```
+
+**If no handlers found**: Create a minimal interact.py that displays a message:
+```python
+"""Workflow interaction client.
+
+This workflow does not define any Signal, Update, or Query handlers.
+No interaction client is needed for this workflow.
+"""
+
+def main() -> None:
+    print("This workflow has no Signal, Update, or Query handlers.")
+    print("No interaction is required.")
+
+if __name__ == "__main__":
+    main()
+```
+
+### Step 5: Generate Example Input Data
 
 Based on `workflow_metadata.inputs` from analysis, generate example values:
 
@@ -409,6 +653,7 @@ Package: {package}_temporal/
 Files generated:
 - worker.py (Worker registration and execution)
 - starter.py (Workflow starter client)
+- interact.py (Workflow interaction client for Signals/Updates/Queries)
 
 Worker Configuration:
 - Task queue: {task_queue}
@@ -428,6 +673,7 @@ Starter Configuration:
 Console Scripts:
 ✓ worker:main (synchronous entry point)
 ✓ starter:main (synchronous entry point)
+✓ interact:main (synchronous entry point) - {N} Updates, {M} Signals, {P} Queries
 
 Features:
 - Both use asyncio.run() to wrap async code
@@ -438,6 +684,10 @@ Features:
 Usage (after 'uv sync'):
 1. Terminal 1: uv run worker
 2. Terminal 2: uv run starter
+3. Interact with workflow: uv run interact <command> <workflow-id> [args]
+
+Interaction Examples:
+{List actual commands for detected handlers}
 
 Ready for validation phase.
 ```
@@ -449,11 +699,14 @@ Your infrastructure generation is complete when:
 - ✅ Worker imports by name (not problematic for worker, but good practice)
 - ✅ **Starter has synchronous main() function** (console script compatible)
 - ✅ **Worker has synchronous main() function** (console script compatible)
+- ✅ **Interact has synchronous main() function** (console script compatible)
 - ✅ Starter generates valid example input data based on schema
-- ✅ Both files have proper error handling and logging
+- ✅ Interact.py generated with all Update/Signal/Query handlers
+- ✅ All three files have proper error handling and logging
 - ✅ Task queue names match between worker and starter
-- ✅ Python syntax validation passes on both files
+- ✅ Python syntax validation passes on all files
 - ✅ No async def main() functions (common error)
+- ✅ Console script for interact added to pyproject.toml
 
 ## Critical Pitfalls to Avoid
 

@@ -34,9 +34,9 @@ This project automates this complex translation using Claude Code's sub-agent ar
 
 ---
 
-## Architecture: 7-Agent Sequential Pipeline
+## Architecture: 8-Agent Sequential Pipeline
 
-The migration system uses a **sequential pipeline** of 7 specialized Claude Code sub-agents. Each agent operates with high autonomy, performing a distinct phase of the migration process.
+The migration system uses a **sequential pipeline** of 8 specialized Claude Code sub-agents. Each agent operates with high autonomy, performing a distinct phase of the migration process.
 
 ### Pipeline Overview
 
@@ -63,10 +63,13 @@ User provides Conductor JSON
    └─> workflow.py
          ↓
 5. Infrastructure Generator
-   └─> worker.py, starter.py
+   └─> worker.py, starter.py, interact.py
          ↓
 6. Code Validator
    └─> Validates & fixes → VALIDATION_REPORT.md
+         ↓
+6.5 Workflow Executor (NEW)
+   └─> Runs & validates → WORKFLOW_EXECUTION_REPORT.md
          ↓
 7. Documentation Generator
    └─> README.md, comparison docs, setup.sh
@@ -218,6 +221,37 @@ User provides Conductor JSON
 
 ---
 
+### 6.5 Workflow Executor
+**Role**: Executes and validates the generated workflow end-to-end
+
+**Responsibilities**:
+- Check/start Temporal server (verify ports 7233/8233, start if needed)
+- Install dependencies via `uv sync`
+- Analyze workflow type (simple vs. interactive with handlers)
+- Execute end-to-end test:
+  - Start worker in background
+  - Execute workflow via starter
+  - For simple workflows: Wait for COMPLETED status
+  - For interactive workflows: Send test interactions, verify responses
+- Validate execution using Temporal CLI (`temporal workflow show`)
+- Handle failures autonomously:
+  - Parse error logs
+  - Identify error types (imports, sandbox, activities)
+  - Invoke other agents to fix (code-validator, infrastructure-generator)
+  - Retry execution up to 3 times
+- Cleanup processes and PID files
+- Generate `WORKFLOW_EXECUTION_REPORT.md`
+
+**Key Output**: `WORKFLOW_EXECUTION_REPORT.md` with execution results, logs, and any fixes applied
+
+**Model**: Inherit
+
+**Critical Consideration**: This agent proves the workflow works before documentation claims it does. Uses techniques from `tmp-workflow-running-guide.md` for all Temporal CLI operations.
+
+**Autonomous Behavior**: This agent RUNS the workflow and FIXES issues found during execution. Up to 3 retry rounds with autonomous fixes.
+
+---
+
 ### 7. Documentation Generator
 **Role**: Final agent - creates comprehensive documentation
 
@@ -253,7 +287,7 @@ User provides Conductor JSON
 
 ### Structured Document: conductor-analysis.json
 
-All agents communicate through `conductor-analysis.json`, a structured analysis document created by Agent 1 and read by Agents 2-7.
+All agents communicate through `conductor-analysis.json`, a structured analysis document created by Agent 1 and read by Agents 2-7 (plus 6.5).
 
 **Schema includes**:
 - `workflow_metadata`: Name, version, description, inputs, outputs
