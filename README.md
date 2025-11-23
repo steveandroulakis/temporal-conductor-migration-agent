@@ -45,7 +45,7 @@ Your generated project will include:
 - `{workflow_name}_temporal/` - Complete Python package
 - `setup.sh` - Automated setup script
 - `README.md` - Setup and usage instructions
-- `CONDUCTOR_COMPARISON.md` - Side-by-side migration guide
+- `CONDUCTOR_COMPARISON.md` - Side-by-side migration git guide
 - `VALIDATION_REPORT.md` - Code quality report
 
 Run the generated project:
