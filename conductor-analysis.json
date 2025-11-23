@@ -1,0 +1,393 @@
+{
+  "analysis_date": "2025-11-23T00:00:00Z",
+  "conductor_file": "conductor-definition/shopping_cart_1.json",
+  "workflow_metadata": {
+    "name": "shopping_cart",
+    "version": 1,
+    "description": "Edit or extend this sample workflow. Set the workflow name to get started",
+    "inputs": ["items"],
+    "outputs": ["cart", "cart_items"],
+    "timeout_seconds": 0,
+    "timeout_policy": "ALERT_ONLY",
+    "schema_version": 2,
+    "restartable": true,
+    "owner_email": "doug.sillars@orkes.io"
+  },
+  "project_config": {
+    "project_name": "ShoppingCart",
+    "project_name_snake": "shopping_cart",
+    "task_queue": "shopping-cart-task-queue"
+  },
+  "tasks": [
+    {
+      "name": "cart_creation",
+      "type": "SET_VARIABLE",
+      "reference_name": "cart_creation_ref",
+      "description": "Initialize shopping cart with workflow input items",
+      "input_parameters": {
+        "cart": "shopping",
+        "cart_items": "${workflow.input.items}"
+      },
+      "output_parameters": {},
+      "dependencies": [],
+      "task_specific_config": {
+        "variables_set": ["cart", "cart_items"]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Translate to direct Python variable assignment: cart = 'shopping', cart_items = input.items"
+    },
+    {
+      "name": "checkout_success",
+      "type": "DO_WHILE",
+      "reference_name": "checkout_success_ref",
+      "description": "Loop until cart status is 'checkout'",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": ["cart_creation_ref"],
+      "task_specific_config": {
+        "loopCondition": "if(\"${workflow.variables.cart}\"!=\"checkout\") { true; } else { false; }",
+        "loopOver": [
+          "last_cart_ref",
+          "cart_wait_ref",
+          "cart_update_ref",
+          "shopping_checkout_ref"
+        ]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": true,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Translate to while cart != 'checkout' loop. Loop contains WAIT task requiring signal/update implementation. Consider continue-as-new if loop iterations could be large."
+    },
+    {
+      "name": "last_cart",
+      "type": "SET_VARIABLE",
+      "reference_name": "last_cart_ref",
+      "description": "Store previous cart state before waiting for updates",
+      "input_parameters": {
+        "lastCart_items": "${workflow.variables.cart_items}"
+      },
+      "output_parameters": {},
+      "dependencies": ["cart_creation_ref"],
+      "task_specific_config": {
+        "variables_set": ["lastCart_items"]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "Inside DO_WHILE loop. Translate to: last_cart_items = cart_items"
+    },
+    {
+      "name": "cart_wait",
+      "type": "WAIT",
+      "reference_name": "cart_wait_ref",
+      "description": "Wait for external cart update from user",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": ["last_cart_ref"],
+      "task_specific_config": {
+        "wait_type": "external_event"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "CRITICAL: This WAIT task expects external data (cart_wait_ref.output.cart and cart_wait_ref.output.cart_items). Must implement as Signal or Update with wait_condition. Recommend Update for validation of cart state changes."
+    },
+    {
+      "name": "cart_update",
+      "type": "SET_VARIABLE",
+      "reference_name": "cart_update_ref",
+      "description": "Update cart variables with data received from external signal",
+      "input_parameters": {
+        "cart": "${cart_wait_ref.output.cart}",
+        "cart_items": "${cart_wait_ref.output.cart_items}"
+      },
+      "output_parameters": {},
+      "dependencies": ["cart_wait_ref"],
+      "task_specific_config": {
+        "variables_set": ["cart", "cart_items"]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "Inside DO_WHILE loop. Translate to: cart = self._cart_update.cart, cart_items = self._cart_update.cart_items (after signal/update received)"
+    },
+    {
+      "name": "shopping_checkout",
+      "type": "SWITCH",
+      "reference_name": "shopping_checkout_ref",
+      "description": "Conditional logic based on cart status",
+      "input_parameters": {
+        "switchCaseValue": "${workflow.variables.cart}"
+      },
+      "output_parameters": {},
+      "dependencies": ["cart_update_ref"],
+      "task_specific_config": {
+        "evaluatorType": "value-param",
+        "expression": "switchCaseValue",
+        "decisionCases": {
+          "checkout": [
+            "checkout_task_ref",
+            "checkout_wait_ref",
+            "sample_task_name_vn45m_ref"
+          ]
+        },
+        "defaultCase": ["sample_task_name_skwrs_ref"]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": true,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "Inside DO_WHILE loop. Translate to: if cart == 'checkout': ... else: ... (default case)"
+    },
+    {
+      "name": "checkout_task",
+      "type": "SUB_WORKFLOW",
+      "reference_name": "checkout_task_ref",
+      "description": "Execute checkout sub-workflow",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": ["shopping_checkout_ref"],
+      "task_specific_config": {
+        "subWorkflowParam": {
+          "name": "pi_calc_test",
+          "version": 1
+        }
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Inside DO_WHILE > SWITCH (checkout case). Translate to: await workflow.execute_child_workflow(PiCalcTestWorkflow.run, ...). Note: Sub-workflow 'pi_calc_test' must be migrated separately."
+    },
+    {
+      "name": "checkout_wait",
+      "type": "WAIT",
+      "reference_name": "checkout_wait_ref",
+      "description": "Wait for checkout completion confirmation",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": ["checkout_task_ref"],
+      "task_specific_config": {
+        "wait_type": "external_event"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Inside DO_WHILE > SWITCH (checkout case). WAIT expects external data (checkout_wait_ref.output.success). Must implement as Signal or Update with wait_condition. Recommend Update for checkout confirmation."
+    },
+    {
+      "name": "sample_task_name_switch",
+      "type": "SWITCH",
+      "reference_name": "sample_task_name_vn45m_ref",
+      "description": "Nested conditional checking checkout success status",
+      "input_parameters": {
+        "switchCaseValue": "${checkout_wait_ref.output.success}"
+      },
+      "output_parameters": {},
+      "dependencies": ["checkout_wait_ref"],
+      "task_specific_config": {
+        "evaluatorType": "value-param",
+        "expression": "switchCaseValue",
+        "decisionCases": {
+          "checkout_failed": ["continue_shopping_ref"]
+        },
+        "defaultCase": ["empty_cart_exit_ref"]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": true,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 3
+      },
+      "temporal_translation_notes": "Inside DO_WHILE > SWITCH (checkout case) > nested SWITCH. Translate to: if self._checkout_result.success == 'checkout_failed': ... else: ... (default case)"
+    },
+    {
+      "name": "continue_shopping",
+      "type": "SET_VARIABLE",
+      "reference_name": "continue_shopping_ref",
+      "description": "Reset cart to shopping mode after failed checkout",
+      "input_parameters": {
+        "cart": "shopping"
+      },
+      "output_parameters": {},
+      "dependencies": ["sample_task_name_vn45m_ref"],
+      "task_specific_config": {
+        "variables_set": ["cart"]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 4
+      },
+      "temporal_translation_notes": "Inside DO_WHILE > SWITCH > nested SWITCH (checkout_failed case). Translate to: cart = 'shopping' (loop will continue)"
+    },
+    {
+      "name": "empty_cart_exit",
+      "type": "SET_VARIABLE",
+      "reference_name": "empty_cart_exit_ref",
+      "description": "Clear cart items after successful checkout",
+      "input_parameters": {
+        "cart_items": ""
+      },
+      "output_parameters": {},
+      "dependencies": ["sample_task_name_vn45m_ref"],
+      "task_specific_config": {
+        "variables_set": ["cart_items"]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 4
+      },
+      "temporal_translation_notes": "Inside DO_WHILE > SWITCH > nested SWITCH (default case). Translate to: cart_items = '' (successful checkout)"
+    },
+    {
+      "name": "sample_task_name_inline",
+      "type": "INLINE",
+      "reference_name": "sample_task_name_skwrs_ref",
+      "description": "Execute inline JavaScript when not in checkout mode",
+      "input_parameters": {
+        "expression": "({ someKey: 'someValue' })",
+        "evaluatorType": "javascript"
+      },
+      "output_parameters": {},
+      "dependencies": ["shopping_checkout_ref"],
+      "task_specific_config": {
+        "expression": "({ someKey: 'someValue' })",
+        "evaluatorType": "javascript"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Inside DO_WHILE > SWITCH (default case). Translate to direct Python code: inline_result = {'someKey': 'someValue'}"
+    }
+  ],
+  "human_interaction_patterns": [
+    {
+      "task_reference": "cart_wait_ref",
+      "task_name": "cart_wait",
+      "pattern_type": "wait",
+      "recommended_mechanism": "update",
+      "data_flow": [
+        "${cart_wait_ref.output.cart}",
+        "${cart_wait_ref.output.cart_items}"
+      ],
+      "timeout_behavior": "No explicit timeout configured - workflow will wait indefinitely",
+      "notes": "User can update cart multiple times before moving to checkout. Recommend Update with validation to ensure cart data structure is valid. Update handler should accept cart status and items, validate them, and store in workflow instance variables."
+    },
+    {
+      "task_reference": "checkout_wait_ref",
+      "task_name": "checkout_wait",
+      "pattern_type": "wait",
+      "recommended_mechanism": "update",
+      "data_flow": [
+        "${checkout_wait_ref.output.success}"
+      ],
+      "timeout_behavior": "No explicit timeout configured - workflow will wait indefinitely",
+      "notes": "Waits for checkout completion status. Recommend Update with validation to ensure success field is valid (e.g., 'checkout_failed' or success status). This controls whether user continues shopping or exits with empty cart."
+    }
+  ],
+  "control_flow_summary": {
+    "max_nesting_depth": 4,
+    "has_loops": true,
+    "has_parallel_execution": false,
+    "has_dynamic_parallelism": false,
+    "has_sub_workflows": true,
+    "complexity_score": "high",
+    "complexity_factors": [
+      "4 levels of nesting (DO_WHILE > SWITCH > nested SWITCH with cases)",
+      "DO_WHILE loop with multiple WAIT tasks requiring human interaction",
+      "Multiple SWITCH statements with nested control flow",
+      "SUB_WORKFLOW execution within conditional branch",
+      "Two WAIT tasks expecting external data at different loop stages",
+      "Complex state management with multiple SET_VARIABLE tasks updating shared state"
+    ]
+  },
+  "data_flow": {
+    "workflow_inputs_used": [
+      "${workflow.input.items}"
+    ],
+    "task_output_references": [
+      "${cart_wait_ref.output.cart}",
+      "${cart_wait_ref.output.cart_items}",
+      "${checkout_wait_ref.output.success}"
+    ],
+    "workflow_variables": [
+      "cart",
+      "cart_items",
+      "lastCart_items"
+    ],
+    "jsonpath_expressions": [],
+    "external_data_dependencies": [
+      "cart_wait_ref.output (user provides cart updates)",
+      "checkout_wait_ref.output (checkout process provides success status)"
+    ]
+  },
+  "recommended_patterns": {
+    "human_interaction": "Updates recommended for 2 WAIT tasks (cart_wait_ref and checkout_wait_ref). Both should validate incoming data structure. cart_wait should validate cart status and items format. checkout_wait should validate success status values.",
+    "error_handling": "No explicit retry policies in Conductor tasks. Recommend adding RetryPolicy for SUB_WORKFLOW execution (checkout_task) to handle transient failures during checkout processing.",
+    "parallel_execution": "No parallel execution in this workflow - all tasks are sequential or conditional",
+    "loop_handling": "DO_WHILE loop requires careful implementation. Since loop depends on external signals, consider: (1) Adding timeout to wait_condition calls, (2) Implementing continue-as-new if user could make many cart updates, (3) Adding query handler to check current cart state",
+    "special_considerations": [
+      "Two different WAIT tasks in workflow create complex signal/update handling - need two separate update handlers with different data structures",
+      "Loop condition checks workflow.variables.cart == 'checkout', which is set by external signal - ensure signal handler updates this correctly",
+      "SUB_WORKFLOW 'pi_calc_test' must be migrated separately before this workflow can be fully tested",
+      "INLINE task with JavaScript expression '({ someKey: 'someValue' })' - straightforward translation to Python dict literal",
+      "Nested SWITCH within SWITCH creates deep conditional logic - consider refactoring into helper methods for readability",
+      "Workflow has no explicit timeout (timeoutSeconds: 0) - consider adding execution_timeout when starting workflow to prevent indefinite waiting"
+    ]
+  },
+  "translation_notes": [
+    "This workflow implements a shopping cart state machine with user interaction at multiple stages",
+    "Main loop continues until cart status changes to 'checkout' via external signal",
+    "Two critical external interaction points: (1) cart updates during shopping, (2) checkout success confirmation",
+    "The workflow has no activities (SIMPLE or HTTP tasks) - all logic is control flow and variable manipulation",
+    "Consider implementing workflow queries to allow external systems to check current cart state without sending signals",
+    "The defaultCase in shopping_checkout_ref executes INLINE JavaScript - this runs when cart status is not 'checkout' (i.e., during shopping phase)",
+    "The checkout case has sequential execution: SUB_WORKFLOW -> WAIT -> nested SWITCH, all must complete before loop continues",
+    "If checkout fails (checkout_failed case), cart resets to 'shopping' and loop continues, allowing user to modify cart and retry",
+    "If checkout succeeds (default case in nested switch), cart_items is cleared and cart remains 'checkout', exiting the loop",
+    "Manual testing will require: (1) Sending cart updates via Update handler, (2) Sending checkout confirmation via different Update handler, (3) Testing both success and failure paths"
+  ]
+}

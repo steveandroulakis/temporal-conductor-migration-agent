@@ -1,0 +1,33 @@
+Progress:
+  ID           Time                     Type           
+    1  2025-11-23T21:13:12Z  WorkflowExecutionStarted  
+    2  2025-11-23T21:13:12Z  WorkflowTaskScheduled     
+    3  2025-11-23T21:13:12Z  WorkflowTaskStarted       
+    4  2025-11-23T21:13:12Z  WorkflowTaskCompleted     
+    5  2025-11-23T21:13:12Z  TimerStarted              
+    6  2025-11-23T21:14:20Z  WorkflowTaskScheduled     
+    7  2025-11-23T21:14:20Z  WorkflowTaskStarted       
+    8  2025-11-23T21:14:20Z  WorkflowTaskCompleted     
+    9  2025-11-23T21:14:20Z  WorkflowExecutionUpdateAccepted
+   10  2025-11-23T21:14:20Z  WorkflowExecutionUpdateCompleted
+   11  2025-11-23T21:14:20Z  TimerCanceled             
+   12  2025-11-23T21:14:20Z  TimerStarted              
+   13  2025-11-23T21:14:32Z  WorkflowTaskScheduled     
+   14  2025-11-23T21:14:32Z  WorkflowTaskStarted       
+   15  2025-11-23T21:14:32Z  WorkflowTaskCompleted     
+   16  2025-11-23T21:14:32Z  WorkflowExecutionUpdateAccepted
+   17  2025-11-23T21:14:32Z  WorkflowExecutionUpdateCompleted
+   18  2025-11-23T21:14:32Z  TimerCanceled             
+   19  2025-11-23T21:14:32Z  TimerStarted              
+   20  2025-11-23T21:14:48Z  WorkflowTaskScheduled     
+   21  2025-11-23T21:14:48Z  WorkflowTaskStarted       
+   22  2025-11-23T21:14:48Z  WorkflowTaskCompleted     
+   23  2025-11-23T21:14:48Z  WorkflowExecutionUpdateAccepted
+   24  2025-11-23T21:14:48Z  WorkflowExecutionUpdateCompleted
+   25  2025-11-23T21:14:48Z  TimerCanceled             
+   26  2025-11-23T21:14:48Z  WorkflowExecutionCompleted
+
+Results:
+  Status          COMPLETED
+  Result          {"cart":"checkout","cart_items":""}
+  ResultEncoding  json/plain

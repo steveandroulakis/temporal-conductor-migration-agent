@@ -1,0 +1,42 @@
+[project]
+name = "shopping_cart_temporal"
+version = "0.1.0"
+description = "Temporal workflow migrated from Conductor: shopping_cart"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "temporalio>=1.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.7.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+worker = "shopping_cart_temporal.worker:main"
+starter = "shopping_cart_temporal.starter:main"
+interact = "shopping_cart_temporal.interact:main"
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["shopping_cart_temporal*"]
+exclude = ["schema_approval_temporal*"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
