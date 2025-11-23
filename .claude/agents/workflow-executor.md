@@ -56,8 +56,21 @@ Follow these steps autonomously:
 ```bash
 if ! command -v temporal &> /dev/null; then
     echo "❌ ERROR: Temporal CLI not installed"
-    echo "Install: brew install temporal (macOS) or see tmp-workflow-running-guide.md"
+    echo "Install: brew install temporal (macOS)"
     exit 1
+fi
+```
+
+**Check jq Installation** (recommended for detailed error analysis):
+```bash
+if ! command -v jq &> /dev/null; then
+    echo "⚠️  WARNING: jq not installed - will use basic error detection"
+    echo "For detailed workflow task failure analysis, install jq:"
+    echo "  macOS: brew install jq"
+    echo "  Linux: apt-get install jq / yum install jq"
+    echo ""
+else
+    echo "✓ jq installed - detailed error analysis available"
 fi
 ```
 
@@ -288,7 +301,7 @@ fi
 ```bash
 echo "Validating workflow execution..."
 
-# Get workflow details
+# Get workflow details in both text and JSON format
 echo "Fetching workflow details..."
 temporal workflow show --workflow-id "$WORKFLOW_ID" > workflow-details.txt 2>&1 || {
     echo "❌ ERROR: Could not fetch workflow details"
@@ -296,20 +309,105 @@ temporal workflow show --workflow-id "$WORKFLOW_ID" > workflow-details.txt 2>&1 
     exit 1
 }
 
-# Check for workflow task failures
-if grep -qi "workflow task failed" workflow-details.txt; then
-    echo "❌ ERROR: Workflow task failed"
-    echo "This usually indicates:"
-    echo "  - Import errors (sandbox violations)"
-    echo "  - Workflow code errors"
-    echo "  - Non-deterministic code"
-    echo ""
-    echo "Workflow details:"
-    cat workflow-details.txt
-    echo ""
-    echo "Worker logs:"
-    tail -n 50 worker.log
-    exit 1
+# Get JSON output for detailed error analysis
+temporal workflow show --workflow-id "$WORKFLOW_ID" -o json > workflow-details.json 2>&1 || {
+    echo "⚠️  Could not fetch workflow details in JSON format"
+    # Continue with text-based validation
+}
+
+# Detect stalled workflows and workflow task failures
+if [ -f workflow-details.json ]; then
+    echo "Analyzing workflow task failures..."
+
+    # Check for workflow task failed events in history
+    TASK_FAILURE=$(cat workflow-details.json | jq -r '.history.events[] | select(.eventType == "EVENT_TYPE_WORKFLOW_TASK_FAILED") | .workflowTaskFailedEventAttributes.failure.message' 2>/dev/null | tail -n 1)
+
+    if [ -n "$TASK_FAILURE" ]; then
+        echo "❌ ERROR: Workflow task failed"
+        echo ""
+        echo "Error Message:"
+        echo "$TASK_FAILURE"
+        echo ""
+
+        # Extract stack trace if available
+        STACK_TRACE=$(cat workflow-details.json | jq -r '.history.events[] | select(.eventType == "EVENT_TYPE_WORKFLOW_TASK_FAILED") | .workflowTaskFailedEventAttributes.failure.stackTrace' 2>/dev/null | tail -n 1)
+
+        if [ -n "$STACK_TRACE" ] && [ "$STACK_TRACE" != "null" ]; then
+            echo "Stack Trace:"
+            echo "$STACK_TRACE"
+            echo ""
+        fi
+
+        # Identify error type
+        ERROR_TYPE=$(cat workflow-details.json | jq -r '.history.events[] | select(.eventType == "EVENT_TYPE_WORKFLOW_TASK_FAILED") | .workflowTaskFailedEventAttributes.failure.applicationFailureInfo.type' 2>/dev/null | tail -n 1)
+
+        if [ -n "$ERROR_TYPE" ] && [ "$ERROR_TYPE" != "null" ]; then
+            echo "Error Type: $ERROR_TYPE"
+            echo ""
+        fi
+
+        # Provide specific guidance based on error patterns
+        echo "Common Causes:"
+        if echo "$TASK_FAILURE" | grep -qi "RestrictedWorkflowAccessError\|sandbox"; then
+            echo "  ✗ SANDBOX VIOLATION: Workflow accessed non-deterministic code"
+            echo "    - Check for datetime.utcnow(), random, network calls in workflow"
+            echo "    - Ensure workflow.py imports activities by name only"
+            echo "    - Move non-deterministic code to activities"
+        elif echo "$TASK_FAILURE" | grep -qi "ModuleNotFoundError\|ImportError"; then
+            echo "  ✗ IMPORT ERROR: Missing module or incorrect import"
+            echo "    - Verify all dependencies are installed (uv sync)"
+            echo "    - Check import statements in workflow.py"
+            echo "    - Ensure activities are imported correctly"
+        elif echo "$TASK_FAILURE" | grep -qi "TypeError.*arguments"; then
+            echo "  ✗ ARGUMENT ERROR: Activity called with wrong number of arguments"
+            echo "    - Check execute_activity() calls match activity signatures"
+            echo "    - Verify dataclass field names and types"
+        elif echo "$TASK_FAILURE" | grep -qi "AttributeError"; then
+            echo "  ✗ ATTRIBUTE ERROR: Accessing undefined attribute"
+            echo "    - Check dataclass field names"
+            echo "    - Verify activity return types"
+        else
+            echo "  - Import errors (sandbox violations)"
+            echo "  - Workflow code errors"
+            echo "  - Non-deterministic code"
+        fi
+        echo ""
+
+        echo "Worker logs:"
+        tail -n 50 worker.log
+        exit 1
+    fi
+
+    # Check for stalled workflows (RUNNING with recent task failures)
+    WORKFLOW_STATUS=$(cat workflow-details.json | jq -r '.status // "UNKNOWN"' 2>/dev/null)
+    if [ "$WORKFLOW_STATUS" = "RUNNING" ]; then
+        TASK_FAIL_COUNT=$(cat workflow-details.json | jq '[.history.events[] | select(.eventType == "EVENT_TYPE_WORKFLOW_TASK_FAILED")] | length' 2>/dev/null)
+        if [ "$TASK_FAIL_COUNT" -gt 0 ]; then
+            echo "⚠️  WARNING: Workflow is RUNNING but has $TASK_FAIL_COUNT workflow task failures"
+            echo "    This indicates the workflow is stalled and retrying failed tasks"
+            echo "    Review the most recent workflow task failure above"
+        fi
+    fi
+fi
+
+# Fallback to text-based validation if JSON parsing unavailable
+if ! command -v jq &> /dev/null || [ ! -f workflow-details.json ]; then
+    echo "Using text-based validation (install jq for detailed error analysis)..."
+
+    if grep -qi "workflow task failed" workflow-details.txt; then
+        echo "❌ ERROR: Workflow task failed"
+        echo "This usually indicates:"
+        echo "  - Import errors (sandbox violations)"
+        echo "  - Workflow code errors"
+        echo "  - Non-deterministic code"
+        echo ""
+        echo "Workflow details:"
+        cat workflow-details.txt
+        echo ""
+        echo "Worker logs:"
+        tail -n 50 worker.log
+        exit 1
+    fi
 fi
 
 # Check for activity failures
@@ -418,6 +516,7 @@ Create `WORKFLOW_EXECUTION_REPORT.md`:
 ## Pre-Flight Checks
 
 - ✅ Temporal CLI installed
+- {✅ or ⚠️} jq installed (for detailed error analysis)
 - ✅ Temporal server running (localhost:7233)
 - ✅ Dependencies installed (uv sync)
 - ✅ Worker started successfully
@@ -452,6 +551,25 @@ Create `WORKFLOW_EXECUTION_REPORT.md`:
 ```
 {cat workflow-details.txt}
 ```
+
+{If workflow task failures detected:}
+### Workflow Task Failures
+
+**Failure Count**: {task_fail_count}
+**Error Type**: {error_type}
+
+**Error Message**:
+```
+{task_failure_message}
+```
+
+**Stack Trace**:
+```
+{stack_trace}
+```
+
+**Analysis**:
+{Provide specific guidance based on error pattern - sandbox violation, import error, argument error, etc.}
 
 {If interactive workflow:}
 ### Interaction Testing
@@ -812,13 +930,75 @@ if grep -q "@workflow.query" {package}/workflow.py; then
 fi
 ```
 
+### 11. Not Detecting Stalled Workflows
+**Symptom**: Workflow appears to be RUNNING but is actually stuck due to workflow task failures. Worker keeps retrying the same failed task indefinitely.
+
+**Root Cause**: Workflow task failures (sandbox violations, import errors, code errors) cause the workflow to stall in RUNNING state while the worker continuously retries. Simple status checks don't reveal the underlying failure.
+
+**Prevention**: Use JSON output to detect workflow task failures and extract detailed error information:
+
+**Detecting stalled workflows**:
+```bash
+# Get workflow details in JSON format for detailed analysis
+temporal workflow show --workflow-id "$WORKFLOW_ID" -o json > workflow-details.json
+
+# Check for workflow task failed events
+TASK_FAILURE=$(cat workflow-details.json | jq -r '.history.events[] | select(.eventType == "EVENT_TYPE_WORKFLOW_TASK_FAILED") | .workflowTaskFailedEventAttributes.failure.message' 2>/dev/null | tail -n 1)
+
+if [ -n "$TASK_FAILURE" ]; then
+    echo "❌ Workflow task failed: $TASK_FAILURE"
+
+    # Extract detailed error information
+    ERROR_TYPE=$(cat workflow-details.json | jq -r '.history.events[] | select(.eventType == "EVENT_TYPE_WORKFLOW_TASK_FAILED") | .workflowTaskFailedEventAttributes.failure.applicationFailureInfo.type' 2>/dev/null | tail -n 1)
+
+    STACK_TRACE=$(cat workflow-details.json | jq -r '.history.events[] | select(.eventType == "EVENT_TYPE_WORKFLOW_TASK_FAILED") | .workflowTaskFailedEventAttributes.failure.stackTrace' 2>/dev/null | tail -n 1)
+
+    echo "Error Type: $ERROR_TYPE"
+    echo "Stack Trace:"
+    echo "$STACK_TRACE"
+fi
+
+# Detect stalled workflows (RUNNING with task failures)
+WORKFLOW_STATUS=$(cat workflow-details.json | jq -r '.status // "UNKNOWN"')
+TASK_FAIL_COUNT=$(cat workflow-details.json | jq '[.history.events[] | select(.eventType == "EVENT_TYPE_WORKFLOW_TASK_FAILED")] | length')
+
+if [ "$WORKFLOW_STATUS" = "RUNNING" ] && [ "$TASK_FAIL_COUNT" -gt 0 ]; then
+    echo "⚠️  WARNING: Workflow is stalled - RUNNING status but has $TASK_FAIL_COUNT task failures"
+fi
+```
+
+**Common workflow task failure types**:
+- **RestrictedWorkflowAccessError**: Sandbox violation (accessing `datetime.utcnow()`, `random`, network calls, etc.)
+- **ModuleNotFoundError/ImportError**: Missing dependencies or incorrect imports
+- **TypeError**: Wrong number of arguments to activities or incorrect types
+- **AttributeError**: Accessing undefined attributes on dataclasses or return values
+
+**Example error message patterns**:
+```
+# Sandbox violation
+"Cannot access datetime.datetime.utcnow.__call__ from inside a workflow"
+
+# Import error
+"No module named 'httpx'" (imported in workflow instead of activity)
+
+# Argument error
+"execute_activity() missing 1 required positional argument"
+
+# Attribute error
+"'NoneType' object has no attribute 'field_name'"
+```
+
+**Always check for workflow task failures before declaring success** - a workflow in RUNNING state may actually be failing repeatedly.
+
 ---
 
 ## Important Notes
 
 - **Temporal CLI Required**: This agent assumes `temporal` CLI is installed. Check and guide user if missing.
+- **jq Recommended**: Install `jq` for detailed workflow task failure analysis. Without jq, falls back to text-based validation with less detailed error information.
 - **Server Management**: Server is started if needed but left running for user inspection. Document this in report.
 - **Worker Logs**: Critical for debugging. Always capture and include relevant excerpts in report.
+- **Workflow Task Failures**: Always check for workflow task failures using JSON output - a workflow in RUNNING state may be stalled due to repeated task failures.
 - **Interactive Workflow Testing**: Test interactions are optional validation - workflow is considered successful if it reaches RUNNING state even if interactions fail.
 - **Retry Strategy**: Up to 3 attempts with fixes applied between attempts. After 3 failures, escalate to manual intervention.
 - **Documentation Dependency**: Documentation generator should reference this report to document any known limitations or issues.

@@ -509,7 +509,6 @@ model: inherit
   - Temporal CLI commands used
 
 **Documentation References**:
-- `tmp-workflow-running-guide.md` (ALL sections - server, worker, workflows, interactions, troubleshooting)
 - `conductor-migration/conductor-troubleshooting.md` (runtime errors)
 - `AGENTS.md` (understanding generated code structure)
 

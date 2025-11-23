@@ -246,7 +246,7 @@ User provides Conductor JSON
 
 **Model**: Inherit
 
-**Critical Consideration**: This agent proves the workflow works before documentation claims it does. Uses techniques from `tmp-workflow-running-guide.md` for all Temporal CLI operations.
+**Critical Consideration**: This agent proves the workflow works before documentation claims it does.
 
 **Autonomous Behavior**: This agent RUNS the workflow and FIXES issues found during execution. Up to 3 retry rounds with autonomous fixes.
 

@@ -109,6 +109,43 @@ Follow these steps autonomously:
        )
    ```
 
+### Step 2.5: CRITICAL - Understand Restricted Workflow Calls
+**STOP. READ THIS BEFORE WRITING ANY WORKFLOW CODE.**
+
+Temporal workflows MUST be deterministic. You CANNOT use these common Python calls in workflow code:
+
+**❌ FORBIDDEN CALLS - Will cause RestrictedWorkflowAccessError:**
+- `datetime.now()` → Use `workflow.now()` instead
+- `datetime.utcnow()` → Use `workflow.utcnow()` instead
+- `datetime.today()` → Use `workflow.now()` instead
+- `time.time()` → Use `workflow.time()` instead
+- `time.sleep()` → Use `await workflow.sleep()` instead
+- `random.random()` → Use `workflow.random()` instead
+- `uuid.uuid4()` → Use `workflow.uuid4()` instead
+- Any network calls (httpx, requests, urllib) → Use activities instead
+- File I/O (open(), pathlib) → Use activities instead
+- Database calls (psycopg2, pymongo) → Use activities instead
+- Environment variables (os.environ, os.getenv) → Pass as workflow input or use activities
+
+**✅ ALLOWED - Deterministic alternatives:**
+```python
+# Time operations
+current_time = workflow.now()  # Returns datetime
+current_timestamp = workflow.time()  # Returns float timestamp
+
+# Random operations
+random_number = workflow.random().random()
+random_int = workflow.random().randint(1, 100)
+
+# UUID generation
+unique_id = workflow.uuid4()
+
+# Sleeping/delays
+await workflow.sleep(timedelta(seconds=30))
+```
+
+**When in doubt**: If a function has side effects or depends on external state, it belongs in an activity, NOT in workflow code.
+
 ### Step 3: Create Workflow Class Structure
 Generate the workflow class skeleton:
 
@@ -670,14 +707,43 @@ await workflow.execute_activity(my_activity, args=[arg1, arg2], timeout=...)
 **Prevention**: ALWAYS set `start_to_close_timeout` on every execute_activity call
 
 ### 6. Non-deterministic Code in Workflow
-**Symptom**: Workflow behavior changes on replay
+**Symptom**: `RestrictedWorkflowAccessError` - "Cannot access {function} from inside a workflow"
 
-**Prevention**: Workflows MUST NOT:
-- Use `random.random()` (use workflow.random() instead)
-- Use `datetime.now()` (use workflow.now() instead)
-- Use `time.sleep()` (use workflow.sleep() instead)
-- Make network calls (use activities instead)
-- Read files (use activities instead)
+**Cause**: Using non-deterministic Python standard library functions
+
+**Common Violations**:
+```python
+# ❌ WRONG - Will cause RestrictedWorkflowAccessError
+from datetime import datetime
+result = SomeResult(completed_at=datetime.utcnow())  # FORBIDDEN
+result = SomeResult(completed_at=datetime.now())      # FORBIDDEN
+time.sleep(30)                                        # FORBIDDEN
+random.random()                                       # FORBIDDEN
+```
+
+**Prevention**: Workflows MUST NOT use these standard library calls:
+- `datetime.now()`, `datetime.utcnow()`, `datetime.today()` → Use `workflow.now()` or `workflow.utcnow()`
+- `time.time()` → Use `workflow.time()`
+- `time.sleep()` → Use `await workflow.sleep(timedelta(...))`
+- `random.random()`, `random.randint()` → Use `workflow.random().random()`, `workflow.random().randint()`
+- `uuid.uuid4()` → Use `workflow.uuid4()`
+- Network calls (httpx, requests) → Use activities
+- File I/O → Use activities
+- Database calls → Use activities
+
+**Correct Implementation**:
+```python
+# ✓ CORRECT - Use workflow's deterministic APIs
+from temporalio import workflow
+
+result = SomeResult(
+    completed_at=workflow.now(),  # Deterministic timestamp
+    request_id=workflow.uuid4()   # Deterministic UUID
+)
+
+await workflow.sleep(timedelta(seconds=30))  # Deterministic sleep
+random_value = workflow.random().random()    # Deterministic random
+```
 
 ### 7. Incomplete wait_condition Implementation
 **Symptom**: Workflow hangs waiting for signal/update

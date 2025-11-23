@@ -326,7 +326,73 @@ grep -A 50 "@dataclass" {package}/shared.py | grep -E "^\s+\w+\s*=" | grep -v ":
 4. Re-run mypy to verify
 5. Document fixes
 
-### Step 10: Check Common Pitfalls
+### Step 10: Check for Restricted Workflow Calls (CRITICAL)
+**This catches RestrictedWorkflowAccessError violations before runtime.**
+
+Check workflow.py for non-deterministic standard library calls:
+
+```bash
+# Check for forbidden datetime calls
+grep -E "datetime\.(now|utcnow|today)\(\)" {package}/workflow.py && {
+    echo "ERROR: workflow.py uses datetime.now()/utcnow()/today() - must use workflow.now()"
+}
+
+# Check for forbidden time calls
+grep -E "time\.(time|sleep)\(\)" {package}/workflow.py && {
+    echo "ERROR: workflow.py uses time.time()/sleep() - must use workflow.time()/workflow.sleep()"
+}
+
+# Check for forbidden random calls
+grep -E "random\.(random|randint|choice)" {package}/workflow.py | grep -v "workflow.random()" && {
+    echo "ERROR: workflow.py uses random module - must use workflow.random()"
+}
+
+# Check for forbidden uuid calls
+grep -E "uuid\.uuid4\(\)" {package}/workflow.py | grep -v "workflow.uuid4()" && {
+    echo "ERROR: workflow.py uses uuid.uuid4() - must use workflow.uuid4()"
+}
+
+# Check for os.environ access
+grep -E "os\.(environ|getenv)" {package}/workflow.py && {
+    echo "ERROR: workflow.py accesses environment variables - pass as workflow input or use activities"
+}
+```
+
+**If restricted calls found**:
+1. Read workflow.py to locate the violations
+2. Replace with workflow deterministic APIs:
+   - `datetime.now()` → `workflow.now()`
+   - `datetime.utcnow()` → `workflow.utcnow()`
+   - `time.sleep(N)` → `await workflow.sleep(timedelta(seconds=N))`
+   - `random.random()` → `workflow.random().random()`
+   - `uuid.uuid4()` → `workflow.uuid4()`
+   - Network/file/DB calls → Move to activities
+
+3. Add proper imports if missing:
+   ```python
+   from datetime import timedelta
+   from temporalio import workflow
+   ```
+
+4. Document the fix
+5. Re-run sandbox compliance check
+
+**Example Fix**:
+```python
+# Before (WRONG)
+result = ApprovalResult(
+    status="approved",
+    completed_at=datetime.utcnow(),  # ❌ Restricted!
+)
+
+# After (CORRECT)
+result = ApprovalResult(
+    status="approved",
+    completed_at=workflow.utcnow(),  # ✓ Deterministic
+)
+```
+
+### Step 11: Check Other Common Pitfalls
 From troubleshooting guide, check for:
 
 1. **Missing httpx import** (if HTTP activities present):
@@ -347,14 +413,14 @@ From troubleshooting guide, check for:
    - Check if hardcoded "localhost:7233" should be configurable
    - Add note in validation report if found
 
-### Step 11: Re-validation After Fixes
+### Step 12: Re-validation After Fixes
 After applying fixes:
 1. Re-run ALL validation steps (syntax, mypy, sandbox)
 2. Verify all issues resolved
 3. If new issues found, fix and re-validate
 4. **Maximum 3 re-validation rounds** - if still failing, report for manual intervention
 
-### Step 12: Generate Validation Report
+### Step 13: Generate Validation Report
 
 Create `VALIDATION_REPORT.md`:
 
@@ -406,7 +472,14 @@ Remaining errors: {count}
 Activities import pattern: {SPECIFIC_IMPORTS / MODULE_IMPORT}
 Non-deterministic imports in activities.py: {list if any}
 
-{If issues: Details of fix applied}
+Restricted workflow calls check:
+- ✅ No datetime.now()/utcnow()/today() calls (or: ❌ Found {N}, fixed to workflow.now())
+- ✅ No time.time()/sleep() calls (or: ❌ Found {N}, fixed to workflow.time()/sleep())
+- ✅ No random module calls (or: ❌ Found {N}, fixed to workflow.random())
+- ✅ No uuid.uuid4() calls (or: ❌ Found {N}, fixed to workflow.uuid4())
+- ✅ No os.environ access
+
+{If issues: Details of fixes applied}
 
 Verification command:
 ```bash
@@ -491,7 +564,7 @@ Please review issues requiring manual intervention above.
 **Validation completed at**: {timestamp}
 ```
 
-### Step 13: Report Completion
+### Step 14: Report Completion
 
 Report to main agent:
 
