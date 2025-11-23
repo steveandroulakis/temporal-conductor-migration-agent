@@ -41,7 +41,7 @@ Place your Conductor JSON workflow in:
    cd conductor-definition
    # Add your Conductor workflow.json here
    # REPLACE the example json
-   # ENSURE YOU HAVE A SINGLE JSON CONDUCTOR WORKFLOW IN THIS DIRECTORY
+   # ENSURE YOU HAVE A SINGLE CONDUCTOR PROJECT IN THIS DIRECTORY
    ```
 
 ### Step 3: Run Migration Command
