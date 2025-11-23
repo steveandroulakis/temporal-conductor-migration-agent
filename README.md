@@ -47,12 +47,19 @@ Place your Conductor JSON workflow in:
 ### Step 3: Run Migration Command
 In Claude Code, execute:
 ```
-/migrate-conductor # it will find any json in this directory and migrate it to Temporal
+/migrate-conductor
 ```
+
+OR with optional context/requirements, for example:
+```
+/migrate-conductor My USPS username is steveandroulakis. If API calls fail, use mock responses as placeholders.
+```
+The arguments you provide will be passed to all agents in the pipeline, informing their code generation decisions.
 
 The pipeline will automatically:
 - Analyze your Conductor workflow
 - Generate a complete Temporal Python project
+- Use your provided context to guide activity implementations
 - Validate and fix any issues
 - Create comprehensive documentation
 
