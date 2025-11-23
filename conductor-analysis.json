@@ -1,0 +1,458 @@
+{
+  "analysis_date": "2025-11-23T00:00:00Z",
+  "conductor_file": "conductor-definition/EXAMPLE_review_approval.json",
+  "workflow_metadata": {
+    "name": "schema_approval",
+    "version": 1,
+    "description": "Schema approval workflow with multi-stage review process",
+    "inputs": [],
+    "outputs": {},
+    "timeout_seconds": 0,
+    "timeout_policy": "ALERT_ONLY",
+    "schema_version": 2,
+    "restartable": true,
+    "owner_email": "manan16489@gmail.com"
+  },
+  "project_config": {
+    "project_name": "SchemaApproval",
+    "project_name_snake": "schema_approval",
+    "task_queue": "schema-approval-task-queue"
+  },
+  "tasks": [
+    {
+      "name": "repeat_until_approved",
+      "type": "DO_WHILE",
+      "reference_name": "repeat_until_approved",
+      "description": "Loop that repeats until workflow variable 'approved' is true",
+      "input_parameters": {
+        "approved": "${workflow.variables.approved}",
+        "approved2": true
+      },
+      "output_parameters": {},
+      "dependencies": [],
+      "task_specific_config": {
+        "loopCondition": "if ($.approved) { false;} else { true;}",
+        "loopOver": [
+          "upload_schema",
+          "my_fork_join_ref",
+          "notification_join_ref",
+          "Review1Check"
+        ]
+      },
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": true,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "Translate to Python while loop. Check $.approved condition each iteration. May need continue-as-new if iterations exceed 100."
+    },
+    {
+      "name": "upload_schema",
+      "type": "SIMPLE",
+      "reference_name": "upload_schema",
+      "description": "Simple task to upload schema for review",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": [],
+      "task_specific_config": {},
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Translate to @activity.defn function. First task in DO_WHILE loop."
+    },
+    {
+      "name": "fork_join",
+      "type": "FORK_JOIN",
+      "reference_name": "my_fork_join_ref",
+      "description": "Parallel execution of Review1.a and Review1.b",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": ["upload_schema"],
+      "task_specific_config": {
+        "forkTasks": [
+          ["Review1.a"],
+          ["Review1.b"]
+        ]
+      },
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": true,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Translate to asyncio.gather() with two parallel activity executions. Execute Review1.a and Review1.b concurrently."
+    },
+    {
+      "name": "Review1.a",
+      "type": "SIMPLE",
+      "reference_name": "Review1.a",
+      "description": "First parallel review task (branch A)",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": ["upload_schema"],
+      "task_specific_config": {},
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": true,
+        "nesting_level": 3
+      },
+      "temporal_translation_notes": "Translate to @activity.defn function. Executes in parallel with Review1.b inside asyncio.gather()."
+    },
+    {
+      "name": "Review1.b",
+      "type": "SIMPLE",
+      "reference_name": "Review1.b",
+      "description": "First parallel review task (branch B)",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": ["upload_schema"],
+      "task_specific_config": {},
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": true,
+        "nesting_level": 3
+      },
+      "temporal_translation_notes": "Translate to @activity.defn function. Executes in parallel with Review1.a inside asyncio.gather()."
+    },
+    {
+      "name": "notification_join",
+      "type": "JOIN",
+      "reference_name": "notification_join_ref",
+      "description": "Join/synchronization point waiting for Review1.a and Review1.b to complete",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": ["Review1.a", "Review1.b"],
+      "task_specific_config": {
+        "joinOn": ["Review1.a", "Review1.b"]
+      },
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "No explicit translation needed. asyncio.gather() automatically waits for all parallel tasks to complete. JOIN is implicit in the await."
+    },
+    {
+      "name": "Review1Check",
+      "type": "SWITCH",
+      "reference_name": "Review1Check",
+      "description": "Conditional check based on user approval decision from Review1",
+      "input_parameters": {
+        "switchCaseValue": "${user_action.output.approved}",
+        "expression": "if (both approved) return YES; else return NO;"
+      },
+      "output_parameters": {},
+      "dependencies": ["Review1.a", "Review1.b"],
+      "task_specific_config": {
+        "evaluatorType": "value-param",
+        "expression": "switchCaseValue",
+        "decisionCases": {
+          "YES": ["Review2", "Review2Check"],
+          "NO": []
+        },
+        "defaultCase": []
+      },
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": true,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "CRITICAL: This SWITCH references ${user_action.output.approved}, indicating human interaction. Translate to if/elif/else checking self._user_action.approved after receiving Update or Signal from external system. NO case is empty (no tasks), YES case proceeds to Review2."
+    },
+    {
+      "name": "Review2",
+      "type": "SIMPLE",
+      "reference_name": "Review2",
+      "description": "Second review stage (executes if Review1 approved)",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": ["Review1Check"],
+      "task_specific_config": {},
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 3
+      },
+      "temporal_translation_notes": "Translate to @activity.defn function. Executes inside YES branch of Review1Check conditional."
+    },
+    {
+      "name": "Review2Check",
+      "type": "SWITCH",
+      "reference_name": "Review2Check",
+      "description": "Conditional check after Review2 to determine if Review3 is needed",
+      "input_parameters": {
+        "switchCaseValue": "${user_action.output.approved}",
+        "expression": "if (skippReview3) return YES; else return NO;"
+      },
+      "output_parameters": {},
+      "dependencies": ["Review2"],
+      "task_specific_config": {
+        "evaluatorType": "value-param",
+        "expression": "switchCaseValue",
+        "decisionCases": {
+          "YES": ["CompleteReview_1"],
+          "NO": ["Review3", "Review3Check"]
+        },
+        "defaultCase": []
+      },
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": true,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 3
+      },
+      "temporal_translation_notes": "CRITICAL: Nested SWITCH inside Review1Check YES branch. References ${user_action.output.approved} for human interaction. YES branch completes review, NO branch proceeds to Review3. This is a nested conditional (nesting level 3)."
+    },
+    {
+      "name": "CompleteReview",
+      "type": "SIMPLE",
+      "reference_name": "CompleteReview_1",
+      "description": "Complete review task (Review3 skipped path)",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": ["Review2Check"],
+      "task_specific_config": {},
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 4
+      },
+      "temporal_translation_notes": "Translate to @activity.defn function. Executes inside Review2Check YES branch. Note: Same task name used in two locations with different reference names (CompleteReview_1 and CompleteReview_2)."
+    },
+    {
+      "name": "Review3",
+      "type": "SIMPLE",
+      "reference_name": "Review3",
+      "description": "Third review stage (executes if Review2Check requires additional review)",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": ["Review2Check"],
+      "task_specific_config": {},
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 4
+      },
+      "temporal_translation_notes": "Translate to @activity.defn function. Executes inside Review2Check NO branch (deeply nested)."
+    },
+    {
+      "name": "Review3Check",
+      "type": "SWITCH",
+      "reference_name": "Review3Check",
+      "description": "Conditional check after Review3 for final approval",
+      "input_parameters": {
+        "switchCaseValue": "${user_action.output.approved}",
+        "expression": "if (approved) return YES; else return NO;"
+      },
+      "output_parameters": {},
+      "dependencies": ["Review3"],
+      "task_specific_config": {
+        "evaluatorType": "value-param",
+        "expression": "switchCaseValue",
+        "decisionCases": {
+          "YES": ["CompleteReview_2"],
+          "NO": []
+        },
+        "defaultCase": []
+      },
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": true,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 4
+      },
+      "temporal_translation_notes": "CRITICAL: Deeply nested SWITCH (level 4). References ${user_action.output.approved} for human interaction. YES completes review, NO has empty case (loop continues at DO_WHILE level)."
+    },
+    {
+      "name": "CompleteReview",
+      "type": "SIMPLE",
+      "reference_name": "CompleteReview_2",
+      "description": "Complete review task (Review3 completed path)",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": ["Review3Check"],
+      "task_specific_config": {},
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 5
+      },
+      "temporal_translation_notes": "Translate to @activity.defn function. Executes inside Review3Check YES branch. Note: Same task name as CompleteReview_1 but different reference name (CompleteReview_2). Maximum nesting depth of workflow."
+    }
+  ],
+  "human_interaction_patterns": [
+    {
+      "task_reference": "Review1Check",
+      "task_name": "Review1Check",
+      "pattern_type": "approval",
+      "recommended_mechanism": "update",
+      "data_flow": ["${user_action.output.approved}"],
+      "timeout_behavior": "No explicit timeout configured in Conductor task. Consider adding timeout in Temporal implementation.",
+      "notes": "SWITCH task checking external user approval after parallel Review1.a and Review1.b complete. This is the first approval gate. Recommend Update with validation to ensure only authorized reviewers can approve."
+    },
+    {
+      "task_reference": "Review2Check",
+      "task_name": "Review2Check",
+      "pattern_type": "approval",
+      "recommended_mechanism": "update",
+      "data_flow": ["${user_action.output.approved}"],
+      "timeout_behavior": "No explicit timeout configured in Conductor task. Consider adding timeout in Temporal implementation.",
+      "notes": "Nested SWITCH checking whether to skip Review3 or proceed. References same ${user_action.output.approved} pattern. This is the second approval gate determining if additional review is needed."
+    },
+    {
+      "task_reference": "Review3Check",
+      "task_name": "Review3Check",
+      "pattern_type": "approval",
+      "recommended_mechanism": "update",
+      "data_flow": ["${user_action.output.approved}"],
+      "timeout_behavior": "No explicit timeout configured in Conductor task. Consider adding timeout in Temporal implementation.",
+      "notes": "Deeply nested SWITCH (level 4) checking final approval after Review3. References same ${user_action.output.approved} pattern. This is the third and final approval gate before workflow completes or loops back."
+    },
+    {
+      "task_reference": "repeat_until_approved",
+      "task_name": "repeat_until_approved",
+      "pattern_type": "approval_loop",
+      "recommended_mechanism": "update",
+      "data_flow": ["${workflow.variables.approved}"],
+      "timeout_behavior": "No max iterations specified. Consider adding max iteration limit to prevent infinite loops.",
+      "notes": "DO_WHILE loop that continues until $.approved is true. The entire review process (upload, parallel reviews, nested conditionals) repeats until final approval. The 'approved' variable is likely set by CompleteReview tasks. Consider implementing continue-as-new if loop iterations exceed 100 to prevent workflow history bloat."
+    }
+  ],
+  "control_flow_summary": {
+    "max_nesting_depth": 5,
+    "has_loops": true,
+    "has_parallel_execution": true,
+    "has_dynamic_parallelism": false,
+    "has_sub_workflows": false,
+    "complexity_score": "high",
+    "complexity_factors": [
+      "DO_WHILE loop containing entire review process (potential for many iterations)",
+      "FORK_JOIN with 2 parallel branches inside loop",
+      "3 nested SWITCH statements (Review1Check → Review2Check → Review3Check)",
+      "Maximum nesting depth of 5 levels",
+      "Multiple human interaction points requiring external input (${user_action.output.approved})",
+      "Same task name (CompleteReview) used in two different locations with different reference names",
+      "Loop condition depends on workflow variable 'approved' which is not explicitly set in visible tasks",
+      "Complex approval flow with conditional branching at each stage"
+    ]
+  },
+  "data_flow": {
+    "workflow_inputs_used": [],
+    "task_output_references": [
+      "${user_action.output.approved}"
+    ],
+    "jsonpath_expressions": [
+      "$.approved",
+      "${workflow.variables.approved}",
+      "${user_action.output.approved}"
+    ],
+    "workflow_variables": [
+      "approved"
+    ]
+  },
+  "recommended_patterns": {
+    "human_interaction": "Updates recommended for all 3 approval checkpoints (Review1Check, Review2Check, Review3Check). Each Update should validate reviewer authorization and return immediate feedback. The DO_WHILE loop indicates an approval-retry pattern where the entire review process repeats until final approval is granted.",
+    "error_handling": "Retry policies recommended for all SIMPLE tasks (upload_schema, Review1.a, Review1.b, Review2, Review3, CompleteReview_1, CompleteReview_2) as they represent external operations that may fail transiently.",
+    "parallel_execution": "asyncio.gather recommended for FORK_JOIN executing Review1.a and Review1.b in parallel. Both must complete before proceeding to Review1Check.",
+    "loop_handling": "Continue-as-new strongly recommended if DO_WHILE iterations exceed 100 to prevent workflow event history bloat. Consider adding max iteration limit (e.g., 10) to prevent infinite loops. Each iteration includes parallel execution and multiple conditional branches.",
+    "special_considerations": [
+      "The 'approved' workflow variable must be set by CompleteReview activities to exit the DO_WHILE loop. This is not explicitly shown in the Conductor JSON - ensure CompleteReview activities set this variable in Temporal implementation.",
+      "All SWITCH tasks reference ${user_action.output.approved}, suggesting a consistent pattern for receiving approval decisions. Consider creating a shared ApprovalDecision dataclass.",
+      "The workflow has NO explicit workflow inputs (inputParameters is empty array). Consider adding workflow input for initial submission data.",
+      "Task name 'CompleteReview' is reused with different reference names (CompleteReview_1, CompleteReview_2). In Temporal, these should be the same activity function called from different code paths.",
+      "Review2Check expression mentions 'skippReview3' which suggests a business rule for conditionally skipping Review3 based on certain criteria - this logic needs to be implemented in the approval decision.",
+      "The deeply nested structure (5 levels) makes the workflow complex to test and debug. Consider helper methods in workflow class to manage each review stage separately.",
+      "No timeout configuration present. Add timeouts for all activities and human interaction wait conditions to prevent indefinite blocking."
+    ]
+  },
+  "translation_notes": [
+    "This workflow represents a complex multi-stage approval process with retry-until-approved semantics.",
+    "The DO_WHILE loop wraps the entire review process, meaning if approval is not granted at any stage, the entire process restarts from upload_schema.",
+    "Three separate approval checkpoints (Review1Check, Review2Check, Review3Check) all reference ${user_action.output.approved}, suggesting they may be checking different approval decisions or the same decision from different reviewers.",
+    "The workflow has empty inputParameters and outputParameters arrays - consider defining explicit input/output contracts for better type safety in Temporal.",
+    "The 'approved' workflow variable referenced in the DO_WHILE loop condition ($.approved) must be set somewhere to exit the loop. This is likely set by CompleteReview tasks but not explicitly shown in the JSON.",
+    "Consider implementing workflow queries to allow external systems to check current approval status and review stage.",
+    "The parallel execution of Review1.a and Review1.b suggests two independent reviewers must both complete their reviews before proceeding.",
+    "Review2Check has a conditional path that can skip Review3 entirely (YES branch goes to CompleteReview_1), suggesting an expedited approval path for certain scenarios.",
+    "Maximum nesting depth of 5 is at the upper limit of maintainable complexity. Consider refactoring into helper methods for each review stage.",
+    "No error handling or compensation logic is visible in the Conductor JSON. Consider adding error handling for activity failures in Temporal implementation.",
+    "The workflow is marked as restartable=true, indicating it can be restarted from the beginning if needed."
+  ]
+}

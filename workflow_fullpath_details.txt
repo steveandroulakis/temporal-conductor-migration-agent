@@ -1,0 +1,66 @@
+Progress:
+  ID           Time                     Type           
+    1  2025-11-23T19:45:55Z  WorkflowExecutionStarted  
+    2  2025-11-23T19:45:55Z  WorkflowTaskScheduled     
+    3  2025-11-23T19:45:55Z  WorkflowTaskStarted       
+    4  2025-11-23T19:45:55Z  WorkflowTaskCompleted     
+    5  2025-11-23T19:45:55Z  ActivityTaskScheduled     
+    6  2025-11-23T19:45:55Z  ActivityTaskStarted       
+    7  2025-11-23T19:45:55Z  ActivityTaskCompleted     
+    8  2025-11-23T19:45:55Z  WorkflowTaskScheduled     
+    9  2025-11-23T19:45:55Z  WorkflowTaskStarted       
+   10  2025-11-23T19:45:55Z  WorkflowTaskCompleted     
+   11  2025-11-23T19:45:55Z  ActivityTaskScheduled     
+   12  2025-11-23T19:45:55Z  ActivityTaskScheduled     
+   13  2025-11-23T19:45:55Z  ActivityTaskStarted       
+   14  2025-11-23T19:45:55Z  ActivityTaskCompleted     
+   15  2025-11-23T19:45:55Z  WorkflowTaskScheduled     
+   16  2025-11-23T19:45:55Z  ActivityTaskStarted       
+   17  2025-11-23T19:45:55Z  ActivityTaskCompleted     
+   18  2025-11-23T19:45:55Z  WorkflowTaskStarted       
+   19  2025-11-23T19:45:55Z  WorkflowTaskCompleted     
+   20  2025-11-23T19:45:55Z  TimerStarted              
+   21  2025-11-23T19:46:13Z  WorkflowTaskScheduled     
+   22  2025-11-23T19:46:13Z  WorkflowTaskStarted       
+   23  2025-11-23T19:46:13Z  WorkflowTaskCompleted     
+   24  2025-11-23T19:46:13Z  WorkflowExecutionUpdateAccepted
+   25  2025-11-23T19:46:13Z  WorkflowExecutionUpdateCompleted
+   26  2025-11-23T19:46:13Z  TimerCanceled             
+   27  2025-11-23T19:46:13Z  ActivityTaskScheduled     
+   28  2025-11-23T19:46:13Z  ActivityTaskStarted       
+   29  2025-11-23T19:46:13Z  ActivityTaskCompleted     
+   30  2025-11-23T19:46:13Z  WorkflowTaskScheduled     
+   31  2025-11-23T19:46:13Z  WorkflowTaskStarted       
+   32  2025-11-23T19:46:13Z  WorkflowTaskCompleted     
+   33  2025-11-23T19:46:13Z  TimerStarted              
+   34  2025-11-23T19:46:15Z  WorkflowTaskScheduled     
+   35  2025-11-23T19:46:15Z  WorkflowTaskStarted       
+   36  2025-11-23T19:46:15Z  WorkflowTaskCompleted     
+   37  2025-11-23T19:46:15Z  WorkflowExecutionUpdateAccepted
+   38  2025-11-23T19:46:15Z  WorkflowExecutionUpdateCompleted
+   39  2025-11-23T19:46:15Z  TimerCanceled             
+   40  2025-11-23T19:46:15Z  ActivityTaskScheduled     
+   41  2025-11-23T19:46:15Z  ActivityTaskStarted       
+   42  2025-11-23T19:46:15Z  ActivityTaskCompleted     
+   43  2025-11-23T19:46:15Z  WorkflowTaskScheduled     
+   44  2025-11-23T19:46:15Z  WorkflowTaskStarted       
+   45  2025-11-23T19:46:15Z  WorkflowTaskCompleted     
+   46  2025-11-23T19:46:15Z  TimerStarted              
+   47  2025-11-23T19:46:17Z  WorkflowTaskScheduled     
+   48  2025-11-23T19:46:17Z  WorkflowTaskStarted       
+   49  2025-11-23T19:46:17Z  WorkflowTaskCompleted     
+   50  2025-11-23T19:46:17Z  WorkflowExecutionUpdateAccepted
+   51  2025-11-23T19:46:17Z  WorkflowExecutionUpdateCompleted
+   52  2025-11-23T19:46:17Z  TimerCanceled             
+   53  2025-11-23T19:46:17Z  ActivityTaskScheduled     
+   54  2025-11-23T19:46:17Z  ActivityTaskStarted       
+   55  2025-11-23T19:46:17Z  ActivityTaskCompleted     
+   56  2025-11-23T19:46:17Z  WorkflowTaskScheduled     
+   57  2025-11-23T19:46:17Z  WorkflowTaskStarted       
+   58  2025-11-23T19:46:17Z  WorkflowTaskCompleted     
+   59  2025-11-23T19:46:17Z  WorkflowExecutionCompleted
+
+Results:
+  Status          COMPLETED
+  Result          {"approval_history":[{"approved":true,"decision":"YES","iteration":1,"reviewer":"reviewer-1a","stage":"Review1Check","timestamp":"2025-11-23T19:46:13.266877+00:00"},{"approved":true,"decision":"YES","iteration":1,"reviewer":"reviewer-2","skip_review3":false,"stage":"Review2Check","timestamp":"2025-11-23T19:46:15.277415+00:00"},{"approved":true,"decision":"YES","iteration":1,"reviewer":"reviewer-3","stage":"Review3Check","timestamp":"2025-11-23T19:46:17.285028+00:00"}],"approved":true,"completed_at":"2025-11-23T19:46:17.297962+00:00","final_approval_stage":"Review3Check (full review)","iterations":1,"schema_id":"example-schema-001","status":"approved"}
+  ResultEncoding  json/plain
