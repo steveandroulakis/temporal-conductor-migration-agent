@@ -1,0 +1,43 @@
+[project]
+name = "schema_approval_temporal"
+version = "0.1.0"
+description = "Temporal workflow migrated from Conductor: schema_approval"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "temporalio>=1.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.7.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+worker = "schema_approval_temporal.worker:main"
+starter = "schema_approval_temporal.starter:main"
+interact = "schema_approval_temporal.interact:main"
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18.2",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true

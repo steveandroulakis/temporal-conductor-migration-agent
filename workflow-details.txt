@@ -1,0 +1,27 @@
+Execution Info:
+  WorkflowId            schema-approval-a9c263ff-d847-41ad-97ad-190fe1bb04d5
+  RunId                 019ab261-8e9f-72ab-ab97-8d969cc2ed28
+  Type                  SchemaApprovalWorkflow
+  Namespace             default
+  TaskQueue             schema-approval-task-queue
+  AssignedBuildId        
+  StartTime             1 minute ago
+  CloseTime             32 seconds ago
+  ExecutionTime         1 minute ago
+  SearchAttributes      map[BuildIds:metadata:{key:"encoding" value:"json/plain"} metadata:{key:"type" value:"KeywordList"} data:"[\"unversioned\",\"unversioned:7cfe993a603c875a835b6b893ca3473b\"]"]
+  StateTransitionCount  28
+  HistoryLength         59
+  HistorySize           12010
+  RootWorkflowId        schema-approval-a9c263ff-d847-41ad-97ad-190fe1bb04d5
+  RootRunId             019ab261-8e9f-72ab-ab97-8d969cc2ed28
+Extended Execution Info:
+  CancelRequested          false
+  ExecutionExpirationTime  23 hours from now
+  RunExpirationTime        23 hours from now
+  OriginalStartTime        1 minute ago
+
+Results:
+  RunTime         38.98s
+  Status          COMPLETED
+  Result          {"approval_stage":"completed","completed_at":"2025-11-23T20:22:48.296297+00:00","final_decision":{"approved":true,"iterations":1},"status":"approved","total_iterations":1}
+  ResultEncoding  json/plain
