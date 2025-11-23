@@ -1,0 +1,18 @@
+Progress:
+  ID           Time                     Type           
+    1  2025-11-23T22:37:17Z  WorkflowExecutionStarted  
+    2  2025-11-23T22:37:17Z  WorkflowTaskScheduled     
+    3  2025-11-23T22:37:17Z  WorkflowTaskStarted       
+    4  2025-11-23T22:37:17Z  WorkflowTaskCompleted     
+    5  2025-11-23T22:37:17Z  ActivityTaskScheduled     
+    6  2025-11-23T22:37:17Z  ActivityTaskStarted       
+    7  2025-11-23T22:37:17Z  ActivityTaskCompleted     
+    8  2025-11-23T22:37:17Z  WorkflowTaskScheduled     
+    9  2025-11-23T22:37:17Z  WorkflowTaskStarted       
+   10  2025-11-23T22:37:17Z  WorkflowTaskCompleted     
+   11  2025-11-23T22:37:17Z  WorkflowExecutionCompleted
+
+Results:
+  Status          COMPLETED
+  Result          {"error_message":null,"parsed_address":{"city":"WASHINGTON","state":"DC","street":"1600 PENNSYLVANIA AVE NW","zip":"20500"},"success":true}
+  ResultEncoding  json/plain

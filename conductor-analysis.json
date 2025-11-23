@@ -1,0 +1,356 @@
+{
+  "analysis_date": "2025-11-23T00:00:00Z",
+  "conductor_file": "/Users/steveandroulakis/Code/xinyi_migration_conductor/template/temporal-conductor-migration-agent/conductor-definition/check_address.json",
+  "workflow_metadata": {
+    "name": "check_address",
+    "version": 1,
+    "description": "verify an address with USPS",
+    "inputs": [
+      "street",
+      "city",
+      "state",
+      "zip"
+    ],
+    "outputs": [
+      "header",
+      "address"
+    ],
+    "timeout_seconds": 0,
+    "timeout_policy": "ALERT_ONLY",
+    "schema_version": 2,
+    "restartable": true,
+    "owner_email": "doug.sillars@orkes.io"
+  },
+  "project_config": {
+    "project_name": "CheckAddress",
+    "project_name_snake": "check_address",
+    "task_queue": "check-address-task-queue"
+  },
+  "tasks": [
+    {
+      "name": "verify address",
+      "type": "HTTP",
+      "reference_name": "verify_addy_usps",
+      "description": "Call USPS API to verify address validity",
+      "input_parameters": {
+        "http_request": {
+          "uri": "https://production.shippingapis.com/ShippingAPI.dll?API=Verify&XML=<AddressValidateRequest USERID=${workflow.secrets.post_office_username}><Address><Address1>${workflow.input.street}</Address1><Address2></Address2><City>${workflow.input.city}</City><State>${workflow.input.state}</State><Zip5>${workflow.input.zip}</Zip5><Zip4></Zip4></Address></AddressValidateRequest>",
+          "method": "POST",
+          "connectionTimeOut": 1000,
+          "readTimeOut": 1000
+        }
+      },
+      "output_parameters": {
+        "response": "HTTP response object containing headers and body"
+      },
+      "dependencies": [],
+      "task_specific_config": {
+        "method": "POST",
+        "uri_template": "USPS API with XML-embedded workflow inputs and secrets",
+        "connection_timeout": 1000,
+        "read_timeout": 1000,
+        "uses_secrets": true,
+        "secret_name": "post_office_username",
+        "secret_value": "steveandroulakis"
+      },
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Translate to HTTP activity using httpx.AsyncClient(). URI template must substitute workflow inputs (street, city, state, zip) and the USPS username (steveandroulakis). XML formatting should be handled in the activity. If USPS API fails, provide mock XML response as fallback."
+    },
+    {
+      "name": "api_success",
+      "type": "SWITCH",
+      "reference_name": "api_success",
+      "description": "Check if USPS API call succeeded by examining X-Backside-Transport header",
+      "input_parameters": {
+        "switchCaseValue": "${verify_addy_usps.output.response.headers.X-Backside-Transport[0]}"
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "verify_addy_usps"
+      ],
+      "task_specific_config": {
+        "evaluatorType": "value-param",
+        "expression": "switchCaseValue",
+        "decisionCases": {
+          "FAIL FAIL": [
+            "API_fail"
+          ]
+        },
+        "defaultCase": [
+          "address_success"
+        ]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": true,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "Translate to if/else checking http_response.headers.get('X-Backside-Transport', [''])[0]. If value is 'FAIL FAIL', execute API failure path. Otherwise (default case), proceed to address validation logic."
+    },
+    {
+      "name": "terminate_fail",
+      "type": "TERMINATE",
+      "reference_name": "API_fail",
+      "description": "Terminate workflow with FAILED status when API call fails",
+      "input_parameters": {
+        "terminationStatus": "FAILED",
+        "workflowOutput": {
+          "api_response": "${verify_addy_usps.output.response.body}"
+        }
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "api_success"
+      ],
+      "task_specific_config": {
+        "terminationStatus": "FAILED",
+        "workflowOutput_template": "api_response from HTTP task"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Translate to raising ApplicationError with message containing the API response body. This will fail the workflow execution with the error details."
+    },
+    {
+      "name": "address_success",
+      "type": "SWITCH",
+      "reference_name": "address_success",
+      "description": "Check if address validation response contains errors by examining XML body",
+      "input_parameters": {
+        "inputvalue": "${verify_addy_usps.output.response.body}"
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "api_success"
+      ],
+      "task_specific_config": {
+        "evaluatorType": "javascript",
+        "expression": "function hasError() {var input = $.inputvalue; if(input.indexOf('Error')>0){return false;}else{return true;}} hasError();",
+        "decisionCases": {
+          "false": [
+            "get_error_message",
+            "address_error"
+          ]
+        },
+        "defaultCase": [
+          "parse_address_json",
+          "terminate_success"
+        ]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": true,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Translate to if statement checking if 'Error' substring exists in response body. If Error found (returns false), execute error path. Otherwise (default case), execute success path to parse valid address."
+    },
+    {
+      "name": "get_error_message",
+      "type": "INLINE",
+      "reference_name": "get_error_message",
+      "description": "Extract error description from USPS XML response using JavaScript",
+      "input_parameters": {
+        "xml": "${verify_addy_usps.output.response.body}",
+        "evaluatorType": "javascript",
+        "expression": "function e() {var xml = $.xml;var descriptionIndexStart = xml.indexOf('<Description>')+13;var descriptionIndexEnd = xml.indexOf('</Description>');var description = xml.substring(descriptionIndexStart,descriptionIndexEnd);return description;}e();"
+      },
+      "output_parameters": {
+        "result": "Error description string extracted from XML"
+      },
+      "dependencies": [
+        "address_success"
+      ],
+      "task_specific_config": {
+        "evaluatorType": "javascript",
+        "expression_logic": "Parse XML to extract <Description> tag content"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 3
+      },
+      "temporal_translation_notes": "Translate to Python workflow code using string parsing: find <Description> and </Description> tags, extract substring between them. No external activity needed - can be inline Python in workflow. Consider using xml.etree.ElementTree for safer XML parsing."
+    },
+    {
+      "name": "terminate_fail_error",
+      "type": "TERMINATE",
+      "reference_name": "address_error",
+      "description": "Terminate workflow with COMPLETED status but include error message",
+      "input_parameters": {
+        "terminationStatus": "COMPLETED",
+        "workflowOutput": {
+          "error_message": "${get_error_message.output}"
+        }
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "get_error_message"
+      ],
+      "task_specific_config": {
+        "terminationStatus": "COMPLETED",
+        "workflowOutput_template": "error_message from INLINE task"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 3
+      },
+      "temporal_translation_notes": "Translate to returning a result object with error_message field. Even though Conductor marks this COMPLETED, it represents a validation error. Return structured result indicating invalid address with error description."
+    },
+    {
+      "name": "parse_address_json",
+      "type": "INLINE",
+      "reference_name": "parse_address_json",
+      "description": "Parse validated address from USPS XML response into JSON structure",
+      "input_parameters": {
+        "xml": "${verify_addy_usps.output.response.body}",
+        "evaluatorType": "javascript",
+        "expression": "function e() {var xml = $.xml;var streetIndexStart = xml.indexOf('<Address2>')+10;var streetIndexEnd = xml.indexOf('</Address2>');var street = xml.substring(streetIndexStart,streetIndexEnd);var cityIndexStart = xml.indexOf('<City>')+6;var cityIndexEnd = xml.indexOf('</City>');var city = xml.substring(cityIndexStart,cityIndexEnd);var stateIndexStart = xml.indexOf('<State>')+7;var stateIndexEnd = xml.indexOf('</State>');var state = xml.substring(stateIndexStart,stateIndexEnd);var zipIndexStart = xml.indexOf('<Zip5>')+6;var zipIndexEnd = xml.indexOf('</Zip5>');var zip = xml.substring(zipIndexStart,zipIndexEnd);var json = '{\"street\":\"' +street+'\",\"city\":\"' +city+'\",\"state\":\"' +state+'\",\"zip\":\"' +zip+'\"}' ;return JSON.parse(json);}e();"
+      },
+      "output_parameters": {
+        "result": "Parsed address object with street, city, state, zip fields"
+      },
+      "dependencies": [
+        "address_success"
+      ],
+      "task_specific_config": {
+        "evaluatorType": "javascript",
+        "expression_logic": "Parse XML to extract <Address2>, <City>, <State>, <Zip5> tags and construct JSON object"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 3
+      },
+      "temporal_translation_notes": "Translate to Python workflow code using string parsing or xml.etree.ElementTree to extract Address2, City, State, Zip5 tags. Construct Python dict with street, city, state, zip fields. No external activity needed - can be inline Python in workflow."
+    },
+    {
+      "name": "terminate_success",
+      "type": "TERMINATE",
+      "reference_name": "terminate_success",
+      "description": "Terminate workflow with COMPLETED status and validated address data",
+      "input_parameters": {
+        "terminationStatus": "COMPLETED",
+        "workflowOutput": {
+          "api_response": "${parse_address_json.output}"
+        }
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "parse_address_json"
+      ],
+      "task_specific_config": {
+        "terminationStatus": "COMPLETED",
+        "workflowOutput_template": "parsed address from INLINE task"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 3
+      },
+      "temporal_translation_notes": "Translate to returning the parsed address object as the workflow result. This is the success path with validated address data."
+    }
+  ],
+  "human_interaction_patterns": [],
+  "control_flow_summary": {
+    "max_nesting_depth": 3,
+    "has_loops": false,
+    "has_parallel_execution": false,
+    "has_dynamic_parallelism": false,
+    "has_sub_workflows": false,
+    "has_nested_switches": true,
+    "complexity_score": "medium",
+    "complexity_factors": [
+      "Nested SWITCH tasks (2 levels deep)",
+      "Multiple TERMINATE tasks with different outcomes (FAILED vs COMPLETED)",
+      "INLINE tasks with JavaScript XML parsing logic",
+      "Complex conditional branching based on HTTP response",
+      "Secret substitution in URI template",
+      "XML response parsing required"
+    ]
+  },
+  "data_flow": {
+    "workflow_inputs_used": [
+      "${workflow.input.street}",
+      "${workflow.input.city}",
+      "${workflow.input.state}",
+      "${workflow.input.zip}"
+    ],
+    "workflow_secrets_used": [
+      "${workflow.secrets.post_office_username}"
+    ],
+    "task_output_references": [
+      "${verify_addy_usps.output.response.headers.X-Backside-Transport[0]}",
+      "${verify_addy_usps.output.response.body}",
+      "${get_error_message.output}",
+      "${parse_address_json.output}"
+    ],
+    "jsonpath_expressions": [
+      "$.xml (in INLINE tasks)",
+      "$.inputvalue (in SWITCH task)",
+      "$.switchCaseValue (in SWITCH task)"
+    ],
+    "workflow_variables": [],
+    "secrets_configuration": {
+      "post_office_username": {
+        "used_in": "verify_addy_usps HTTP task URI",
+        "provided_value": "steveandroulakis",
+        "translation_note": "Pass as workflow input or configuration parameter in Temporal"
+      }
+    }
+  },
+  "recommended_patterns": {
+    "http_activity": "Create HTTP activity using httpx.AsyncClient() with POST method, timeout configuration (1000ms connection and read timeouts), and proper error handling",
+    "xml_parsing": "Use Python's xml.etree.ElementTree for safer XML parsing instead of string manipulation. Handle XML parsing errors gracefully.",
+    "error_handling": "Implement try-except blocks around HTTP call. Use ApplicationError for API failures. Return structured results for validation errors vs successes.",
+    "secrets_management": "Pass USPS username as workflow input parameter or use Temporal's data converter for sensitive data. Document that username is 'steveandroulakis'.",
+    "inline_logic": "JavaScript INLINE tasks should be translated to inline Python code within the workflow. No separate activities needed for simple string parsing.",
+    "terminate_patterns": "TERMINATE tasks map to either raising ApplicationError (for FAILED status) or returning result object (for COMPLETED status)",
+    "mock_fallback": "If USPS API is unavailable, provide mock XML responses in activity implementation for testing purposes",
+    "special_considerations": [
+      "HTTP request embeds XML in URI query parameter - construct carefully",
+      "Multiple exit paths with different termination statuses",
+      "INLINE JavaScript logic needs careful translation to Python equivalents",
+      "Header checking uses array indexing [0] - handle missing headers gracefully",
+      "Nested conditional logic requires careful if/elif/else structure"
+    ]
+  },
+  "translation_notes": [
+    "USPS API Integration: The workflow calls USPS Address Validation API with username 'steveandroulakis'. If the API is unavailable or credentials don't work, implement mock responses in the HTTP activity.",
+    "TERMINATE Task Semantics: Conductor's TERMINATE task can have either FAILED or COMPLETED status. In Temporal, FAILED should raise ApplicationError, while COMPLETED should return a result object (potentially with error details for validation failures).",
+    "INLINE JavaScript Translation: Two INLINE tasks use JavaScript for XML parsing. These should be translated to inline Python code within the workflow using string operations or xml.etree.ElementTree. No separate activities needed.",
+    "Nested SWITCH Logic: The workflow has a SWITCH (api_success) containing another SWITCH (address_success) in its default case. This creates 3-level nesting and requires careful if/elif/else structure in Temporal.",
+    "Header Array Access: The workflow accesses headers.X-Backside-Transport[0] assuming array structure. In Python, use headers.get('X-Backside-Transport', [''])[0] with safe defaults.",
+    "XML Response Format: USPS returns XML responses. Success case contains <Address2>, <City>, <State>, <Zip5> tags. Error case contains <Description> tag. Parse accordingly.",
+    "No Retry Configuration: The HTTP task has no retry policy configured. Consider adding RetryPolicy in Temporal for network resilience.",
+    "Secret Substitution: The URI template uses ${workflow.secrets.post_office_username}. In Temporal, pass this as a regular workflow input parameter or use a secure configuration mechanism.",
+    "Multiple Return Paths: The workflow has 3 distinct termination paths: API failure, validation error (with error message), and success (with parsed address). Structure workflow to handle all three cleanly.",
+    "Timeout Configuration: HTTP task has 1000ms connection and read timeouts. Map to httpx AsyncClient timeout configuration."
+  ]
+}
