@@ -18,10 +18,17 @@ You will autonomously:
   - Execute workflow via starter
   - For simple workflows: Wait for COMPLETED status
   - For interactive workflows: Send test interactions, verify responses
-  - Validate workflow reached expected state
-- **Handle Failures**: Analyze errors, apply fixes autonomously, re-run validation (up to 3 attempts)
+  - **CRITICAL**: Extract and validate workflow result data (check for `success: false`, error fields, null critical outputs)
+  - Validate workflow reached expected state with successful business logic
+- **Validate Execution Quality**:
+  - Check workflow execution status (COMPLETED/FAILED/RUNNING)
+  - Extract and analyze workflow result for failure indicators
+  - Check for activity failures in workflow history
+  - Analyze worker logs for errors and exceptions
+  - Distinguish between expected TODOs and actual failures
+- **Handle Failures**: Analyze errors, report findings with diagnostic information
 - **Cleanup**: Stop worker, remove PID files, optionally stop Temporal server
-- **Report**: Generate `WORKFLOW_EXECUTION_REPORT.md` with results and any fixes applied
+- **Report**: Generate `WORKFLOW_EXECUTION_REPORT.md` with comprehensive results including workflow result analysis
 
 ## Inputs
 
@@ -315,6 +322,36 @@ temporal workflow show --workflow-id "$WORKFLOW_ID" -o json > workflow-details.j
     # Continue with text-based validation
 }
 
+# CRITICAL: Extract and validate workflow result
+echo "Extracting workflow result..."
+if [ -f workflow-details.json ] && command -v jq &> /dev/null; then
+    WORKFLOW_RESULT=$(cat workflow-details.json | jq -r '.result // "null"' 2>/dev/null)
+
+    if [ "$WORKFLOW_RESULT" != "null" ] && [ -n "$WORKFLOW_RESULT" ]; then
+        echo "Workflow Result:"
+        echo "$WORKFLOW_RESULT" | jq '.' 2>/dev/null || echo "$WORKFLOW_RESULT"
+        echo ""
+
+        # Check for common failure patterns in result
+        HAS_SUCCESS_FALSE=$(echo "$WORKFLOW_RESULT" | jq -r 'if type == "object" then (.success == false or .Success == false) else false end' 2>/dev/null || echo "false")
+        HAS_ERROR_FIELD=$(echo "$WORKFLOW_RESULT" | jq -r 'if type == "object" then (has("error") or has("error_message") or has("Error") or has("ErrorMessage")) else false end' 2>/dev/null || echo "false")
+
+        if [ "$HAS_SUCCESS_FALSE" = "true" ] || [ "$HAS_ERROR_FIELD" = "true" ]; then
+            echo "❌ ERROR: Workflow completed but returned a failure result"
+            echo ""
+            echo "The workflow executed without crashing, but the business logic indicates failure."
+            echo "Common causes:"
+            echo "  - Activity implementations have TODO placeholders"
+            echo "  - Missing credentials or configuration"
+            echo "  - Invalid input data"
+            echo "  - External service errors"
+            echo ""
+            echo "Review activity implementations in activities.py for TODO placeholders."
+            exit 1
+        fi
+    fi
+fi
+
 # Detect stalled workflows and workflow task failures
 if [ -f workflow-details.json ]; then
     echo "Analyzing workflow task failures..."
@@ -410,24 +447,84 @@ if ! command -v jq &> /dev/null || [ ! -f workflow-details.json ]; then
     fi
 fi
 
-# Check for activity failures
+# Check for activity failures (CRITICAL - treat as errors, not warnings)
 if grep -qi "activity.*failed" workflow-details.txt; then
-    echo "⚠️  Activity failures detected"
+    echo "❌ ERROR: Activity failures detected"
+    echo ""
     echo "Workflow details:"
     cat workflow-details.txt
     echo ""
-    echo "Worker logs:"
+    echo "Worker logs (last 50 lines):"
     tail -n 50 worker.log
     echo ""
-    echo "Note: Activity failures may be expected if business logic is not implemented"
+
+    # Try to extract specific activity error from JSON
+    if [ -f workflow-details.json ] && command -v jq &> /dev/null; then
+        ACTIVITY_ERROR=$(cat workflow-details.json | jq -r '.history.events[] | select(.eventType == "EVENT_TYPE_ACTIVITY_TASK_FAILED") | .activityTaskFailedEventAttributes.failure.message' 2>/dev/null | tail -n 1)
+
+        if [ -n "$ACTIVITY_ERROR" ]; then
+            echo "Activity Error Message:"
+            echo "$ACTIVITY_ERROR"
+            echo ""
+        fi
+    fi
+
+    echo "Common causes:"
+    echo "  - Activity implementations have TODO placeholders"
+    echo "  - Missing dependencies or imports"
+    echo "  - Invalid input data or argument mismatches"
+    echo "  - External service connection failures"
+    echo "  - Timeout exceeded"
+    echo ""
+    echo "Action required: Review and fix activity implementations before declaring success."
+    exit 1
 fi
 
-# For simple workflows, check completion
+# Check worker logs for unhandled errors or exceptions
+echo "Analyzing worker logs for errors..."
+if grep -qi "error\|exception\|traceback" worker.log; then
+    echo "⚠️  Worker logs contain errors - analyzing..."
+    echo ""
+
+    # Extract error context (5 lines before and after each error)
+    grep -i -A 5 -B 5 "error\|exception\|traceback" worker.log | tail -n 50
+    echo ""
+
+    # Check if errors are fatal
+    if grep -qi "failed to execute activity\|activity execution failed\|workflow execution failed" worker.log; then
+        echo "❌ ERROR: Worker logs show fatal execution failures"
+        exit 1
+    else
+        echo "Errors appear non-fatal (possibly expected logs), continuing validation..."
+    fi
+fi
+
+# For simple workflows, check completion AND result
 if [ "$WORKFLOW_TYPE" = "simple" ]; then
     WORKFLOW_STATUS=$(grep -o "Status:.*" workflow-details.txt | head -n 1 || echo "Status: UNKNOWN")
 
     if echo "$WORKFLOW_STATUS" | grep -q "COMPLETED"; then
-        echo "✓ Workflow completed successfully"
+        echo "✓ Workflow reached COMPLETED status"
+        echo ""
+        echo "Validating workflow result quality..."
+
+        # Double-check that result validation above didn't find issues
+        # (This is a redundant check to ensure we don't miss failures)
+        if [ -f workflow-details.json ] && command -v jq &> /dev/null; then
+            WORKFLOW_RESULT=$(cat workflow-details.json | jq -r '.result // "null"' 2>/dev/null)
+
+            if [ "$WORKFLOW_RESULT" = "null" ] || [ -z "$WORKFLOW_RESULT" ]; then
+                echo "⚠️  WARNING: Workflow completed but returned no result"
+                echo "This may indicate:"
+                echo "  - Workflow has no return statement"
+                echo "  - Activities are not returning data"
+                echo "  - Business logic is incomplete"
+            else
+                echo "✓ Workflow returned a result (validated above)"
+            fi
+        fi
+
+        echo "✓ Workflow execution successful"
     elif echo "$WORKFLOW_STATUS" | grep -q "FAILED"; then
         echo "❌ ERROR: Workflow failed"
         cat workflow-details.txt
@@ -591,8 +688,31 @@ Create `WORKFLOW_EXECUTION_REPORT.md`:
 - ✅ Worker started without errors
 - ✅ Workflow executed and reached {status}
 - ✅ No workflow task failures
-- {✅ or ⚠️} Activity execution results
+- {✅ or ❌} Activity execution results
+- {✅ or ❌} Workflow result indicates success
 - {✅ or ⚠️} Interaction handlers functional
+
+### Workflow Result Analysis
+
+**Workflow returned**:
+```json
+{workflow_result}
+```
+
+**Result validation**:
+{If result has success=false or error fields:}
+❌ **FAILURE**: Workflow completed but business logic failed
+- Error message: {extract error_message or error field}
+- Root cause: {analyze - TODO placeholders, missing config, bad input, etc.}
+- Action required: {specific fix needed}
+
+{If result is null or missing:}
+⚠️  **WARNING**: Workflow completed but returned no result
+- This may indicate incomplete activity implementations
+- Review activities.py for TODO placeholders
+
+{If result looks successful:}
+✅ **SUCCESS**: Workflow returned valid result indicating success
 
 ---
 
@@ -687,6 +807,42 @@ if [ "$WORKFLOW_STATUS" = "RUNNING" ] && [ "$WORKFLOW_TYPE" = "simple" ]; then
     echo "Simple workflow should complete but is still running - possible infinite loop or missing logic"
     # Analyze workflow.py for continue-as-new, loops, etc.
 fi
+
+# 5. Activity failures or business logic failures
+if grep -q "activity.*failed" workflow-details.txt || grep -q "success.*false\|error_message" workflow-details.json; then
+    echo "Detected activity or business logic failures"
+    echo "Analyzing root cause..."
+
+    # Check for TODO placeholders in activities
+    if grep -q "TODO\|NotImplementedError\|pass  # Implementation needed" activities.py; then
+        echo "⚠️  Activities contain TODO placeholders - this is expected for generated code"
+        echo "Activity implementations need to be completed by the user"
+        echo "This is documented as a post-migration task, not a validation failure"
+        echo ""
+        echo "DECISION: Mark as WARNING, not ERROR, since this is expected state"
+        # Don't exit, but document in report
+    else
+        echo "❌ Activity failures with no obvious TODO placeholders"
+        echo "This may indicate:"
+        echo "  - Missing credentials/configuration"
+        echo "  - Invalid input data in starter.py"
+        echo "  - External service connection issues"
+        echo "  - Logic errors in generated code"
+        echo ""
+        echo "Attempting diagnostic analysis..."
+
+        # Extract activity error details
+        if [ -f workflow-details.json ] && command -v jq &> /dev/null; then
+            FAILED_ACTIVITY=$(cat workflow-details.json | jq -r '.history.events[] | select(.eventType == "EVENT_TYPE_ACTIVITY_TASK_FAILED") | .activityTaskFailedEventAttributes.activityType.name' 2>/dev/null | tail -n 1)
+
+            if [ -n "$FAILED_ACTIVITY" ]; then
+                echo "Failed activity: $FAILED_ACTIVITY"
+                echo "Checking activity implementation..."
+                grep -A 20 "def $FAILED_ACTIVITY" activities.py || echo "Could not find activity definition"
+            fi
+        fi
+    fi
+fi
 ```
 
 **Retry Logic**:
@@ -770,8 +926,30 @@ Your workflow execution is successful when:
 - ✅ **For simple workflows**: Workflow reaches COMPLETED status
 - ✅ **For interactive workflows**: Workflow reaches RUNNING state and responds to test interactions
 - ✅ No workflow task failures in execution history
+- ✅ No activity task failures (OR failures are due to expected TODO placeholders)
 - ✅ Worker logs show no crashes or critical errors
+- ✅ **CRITICAL**: Workflow result does not indicate business logic failure (no `success: false` or error fields)
 - ✅ Validation report documents all results
+
+### Result Validation Criteria
+
+**When validating workflow results**, check for these failure indicators:
+
+**JSON result patterns that indicate FAILURE**:
+- `"success": false` or `"Success": false`
+- `"error": "..."` or `"error_message": "..."`
+- `"status": "failed"` or `"status": "error"`
+- Critical fields are `null` (e.g., `"parsed_address": null` when that's the primary output)
+
+**Expected patterns for TODO-based implementations**:
+- Generic error messages like "Not implemented" or "TODO"
+- `NotImplementedError` in worker logs
+- Activities returning placeholder data
+
+**When to FAIL vs WARN**:
+- **FAIL**: Code errors, import failures, sandbox violations, argument mismatches
+- **WARN**: Business logic incomplete due to TODO placeholders (expected state)
+- **FAIL**: Business logic failures when code has no TODOs (indicates real bugs)
 
 ---
 
@@ -930,7 +1108,59 @@ if grep -q "@workflow.query" {package}/workflow.py; then
 fi
 ```
 
-### 11. Not Detecting Stalled Workflows
+### 11. Not Validating Workflow Results
+**Symptom**: Workflow reaches COMPLETED status but business logic actually failed. Execution report declares success when workflow returned `success: false` or error fields.
+
+**Root Cause**: Only checking workflow execution status (COMPLETED/FAILED) without examining the actual result data. A workflow can "complete successfully" from Temporal's perspective while the business logic fails.
+
+**Prevention**: Always extract and validate workflow results after execution:
+
+**Extract workflow result**:
+```bash
+# Get workflow result from JSON output
+temporal workflow show --workflow-id "$WORKFLOW_ID" -o json > workflow-details.json
+
+WORKFLOW_RESULT=$(cat workflow-details.json | jq -r '.result // "null"')
+
+# Display result
+echo "Workflow Result:"
+echo "$WORKFLOW_RESULT" | jq '.'
+```
+
+**Check for failure indicators**:
+```bash
+# Check for common failure patterns
+HAS_SUCCESS_FALSE=$(echo "$WORKFLOW_RESULT" | jq -r 'if type == "object" then (.success == false or .Success == false) else false end')
+
+HAS_ERROR_FIELD=$(echo "$WORKFLOW_RESULT" | jq -r 'if type == "object" then (has("error") or has("error_message") or has("Error") or has("ErrorMessage")) else false end')
+
+if [ "$HAS_SUCCESS_FALSE" = "true" ] || [ "$HAS_ERROR_FIELD" = "true" ]; then
+    echo "❌ ERROR: Workflow completed but business logic failed"
+    echo "$WORKFLOW_RESULT" | jq '.'
+    exit 1
+fi
+```
+
+**Common failure patterns to detect**:
+- `"success": false` - Explicit failure flag
+- `"error": "..."` or `"error_message": "..."` - Error descriptions
+- `"status": "failed"` - Status field indicating failure
+- Critical output fields are `null` (e.g., `"parsed_address": null` when that's the primary output)
+- Generic error messages like "Authorization failure", "Not implemented", "TODO"
+
+**Distinguish between expected vs actual failures**:
+- **Expected**: Activities with TODO placeholders returning generic errors (document as warning)
+- **Actual failure**: Complete implementations returning errors (must fix before declaring success)
+
+**Always check**:
+1. Workflow execution status (COMPLETED/FAILED/RUNNING)
+2. Workflow result data (success indicators, error fields)
+3. Activity execution results (check for activity failures)
+4. Worker logs (check for exceptions or errors)
+
+Only declare success when ALL of these indicate successful execution, not just when workflow status is COMPLETED.
+
+### 12. Not Detecting Stalled Workflows
 **Symptom**: Workflow appears to be RUNNING but is actually stuck due to workflow task failures. Worker keeps retrying the same failed task indefinitely.
 
 **Root Cause**: Workflow task failures (sandbox violations, import errors, code errors) cause the workflow to stall in RUNNING state while the worker continuously retries. Simple status checks don't reveal the underlying failure.
@@ -998,9 +1228,16 @@ fi
 - **jq Recommended**: Install `jq` for detailed workflow task failure analysis. Without jq, falls back to text-based validation with less detailed error information.
 - **Server Management**: Server is started if needed but left running for user inspection. Document this in report.
 - **Worker Logs**: Critical for debugging. Always capture and include relevant excerpts in report.
+- **Workflow Result Validation**: CRITICAL - Always extract and analyze workflow result data. A COMPLETED workflow may still have failed business logic (success: false, error fields, null outputs).
 - **Workflow Task Failures**: Always check for workflow task failures using JSON output - a workflow in RUNNING state may be stalled due to repeated task failures.
+- **Activity Failures**: Distinguish between:
+  - **Expected failures**: TODO placeholders in activities (document as warning, this is expected state)
+  - **Actual failures**: Code errors, import issues, argument mismatches (must be fixed)
 - **Interactive Workflow Testing**: Test interactions are optional validation - workflow is considered successful if it reaches RUNNING state even if interactions fail.
-- **Retry Strategy**: Up to 3 attempts with fixes applied between attempts. After 3 failures, escalate to manual intervention.
-- **Documentation Dependency**: Documentation generator should reference this report to document any known limitations or issues.
+- **Fixing Strategy**: This agent identifies and reports issues but does NOT fix code:
+  - **Workflow-executor role**: Execute, validate, diagnose, and report with detailed analysis
+  - **Other agents fix code**: Infrastructure errors → infrastructure-generator, code errors → code-validator, business logic → activity-generator
+  - **User fixes business logic**: TODO implementations, credentials, configuration
+- **Documentation Dependency**: Documentation generator should reference this report to document any known limitations or issues, including TODO placeholders that need implementation.
 - **Cleanup**: Always clean up PID files and stop worker. Temporal server can be left running.
 

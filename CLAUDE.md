@@ -68,7 +68,7 @@ User provides Conductor JSON
 6. Code Validator
    └─> Validates & fixes → VALIDATION_REPORT.md
          ↓
-6.5 Workflow Executor (NEW)
+6.5 Workflow Executor
    └─> Runs & validates → WORKFLOW_EXECUTION_REPORT.md
          ↓
 7. Documentation Generator
