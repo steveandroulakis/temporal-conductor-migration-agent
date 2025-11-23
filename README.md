@@ -9,9 +9,9 @@
 **⚠️ NOTE:** The agent will ask you to approve _many_ tools and code generations along the way. I would _never_ recommend doing this outside of a sandbox environment but _if you wanted to_, run `claude --dangerously-skip-permissions` to ensure the agent cooks without interruption 🍳
 
 Migrated project examples:
-* [Temporal Document Approvals](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test2/PROJECT_README.md). Based off the Conductor [document approvals example](https://github.com/conductor-sdk/conductor-examples/tree/main/document_approvals).
-* [Temporal Shopping Cart](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test3/PROJECT_README.md). Based off the Conductor [shopping cart example](https://github.com/conductor-sdk/conductor-examples/tree/main/shopping_cart).
-* [Temporal Check Address (USPS)](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test4/PROJECT_README.md). Based off the Conductor [USPS check address example](https://github.com/conductor-sdk/conductor-examples/tree/main/US_post_office)
+* Temporal Document Approvals. [Readme](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test2/PROJECT_README.md) // [Code](https://github.com/steveandroulakis/temporal-conductor-migration-agent/tree/claude_test2/schema_approval_temporal). Based off the Conductor [document approvals example](https://github.com/conductor-sdk/conductor-examples/tree/main/document_approvals).
+* Temporal Shopping Cart. [Readme](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test3/PROJECT_README.md) // [Code](https://github.com/steveandroulakis/temporal-conductor-migration-agent/tree/claude_test3/shopping_cart_temporal). Based off the Conductor [shopping cart example](https://github.com/conductor-sdk/conductor-examples/tree/main/shopping_cart).
+* Temporal Check Address (USPS). [Readme](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test4/PROJECT_README.md) // [Code](https://github.com/steveandroulakis/temporal-conductor-migration-agent/tree/claude_test4/check_address_temporal). Based off the Conductor [USPS check address example](https://github.com/conductor-sdk/conductor-examples/tree/main/US_post_office)
 
 ## What the agent does
 
