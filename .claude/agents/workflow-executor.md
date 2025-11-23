@@ -705,6 +705,113 @@ grep -o "workflow.*-[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9
 
 **Prevention**: Parse workflow.py Update handler signatures to construct proper test JSON
 
+### 9. Testing Only One Execution Path for Complex Workflows
+**Symptom**: Workflow passes initial test but fails in production when different execution paths are taken (e.g., rejection branches, alternative conditional branches, loop iterations)
+
+**Prevention**: For workflows with conditional logic (if/else, SWITCH), loops (while, DO_WHILE), or multiple branches:
+- **Identify complexity indicators** by reading conductor-analysis.json and workflow.py:
+  - `has_loops: true` → Test multiple iterations
+  - `has_parallel_execution: true` → Verify all parallel branches execute
+  - Conditional statements (if/elif/else) → Test each branch
+  - Multiple Update/Signal handlers → Test different interaction sequences
+  - Continue-as-new logic → Test loop behavior
+
+- **Design test scenarios** that cover different execution paths:
+  - **Primary path**: Expected "happy path" through the workflow
+  - **Alternative paths**: Other valid branches (e.g., if workflow has "expedited" vs "standard" paths)
+  - **Edge cases**: Rejection/retry paths, timeout behavior, error conditions
+  - **Loop behavior**: For workflows with loops, test at least one iteration and verify loop exit conditions
+
+- **Execute multiple test runs**: Start separate workflow instances for each test scenario, document results for each path
+
+**Example complexity analysis**:
+```bash
+# Read workflow analysis to determine test coverage needed
+HAS_LOOPS=$(jq -r '.control_flow_summary.has_loops // false' conductor-analysis.json)
+HAS_CONDITIONALS=$(grep -c "if.*:" {package}/workflow.py || echo "0")
+UPDATE_COUNT=$(grep -c "@workflow.update" {package}/workflow.py || echo "0")
+
+if [ "$HAS_LOOPS" = "true" ] || [ "$HAS_CONDITIONALS" -gt 2 ] || [ "$UPDATE_COUNT" -gt 1 ]; then
+    echo "⚠️  Complex workflow detected - multiple test scenarios recommended"
+    echo "   - Loops: $HAS_LOOPS"
+    echo "   - Conditionals: $HAS_CONDITIONALS"
+    echo "   - Interaction points: $UPDATE_COUNT"
+    TEST_SCENARIOS=("primary" "alternative" "edge_case")
+else
+    echo "Simple workflow - single test scenario sufficient"
+    TEST_SCENARIOS=("primary")
+fi
+
+# Execute each scenario
+for SCENARIO in "${TEST_SCENARIOS[@]}"; do
+    echo "Testing scenario: $SCENARIO"
+    # Run workflow with appropriate test data/interactions for this scenario
+    # Document results separately
+done
+```
+
+### 10. Incorrect Query Result Access Pattern
+**Symptom**: Query tests fail with AttributeError or TypeError when accessing query results
+
+**Root Cause**: Query handlers can return different types depending on implementation:
+- Python dataclasses (with attribute access: `result.field_name`)
+- Dictionaries (with key access: `result["field_name"]` or `result.get("field_name")`)
+- Primitive types (str, int, bool)
+- None
+
+**Prevention**: Use defensive access patterns that handle multiple return types:
+
+**In interact.py or test scripts**:
+```python
+# Query the workflow
+result = await handle.query("get_status")
+
+# Defensive access pattern
+if result is None:
+    print("No status available")
+elif isinstance(result, dict):
+    # Dictionary access
+    current_stage = result.get("current_stage", "unknown")
+    iteration = result.get("iteration", 0)
+elif hasattr(result, "__dict__"):
+    # Dataclass or object access
+    current_stage = getattr(result, "current_stage", "unknown")
+    iteration = getattr(result, "iteration", 0)
+else:
+    # Primitive type
+    print(f"Status: {result}")
+```
+
+**In bash test scripts**:
+```bash
+# When using Temporal CLI for queries, output is always JSON
+QUERY_RESULT=$(temporal workflow query --workflow-id "$WORKFLOW_ID" --name "get_status" --output json 2>/dev/null || echo "{}")
+
+# Parse JSON safely
+CURRENT_STAGE=$(echo "$QUERY_RESULT" | jq -r '.current_stage // "unknown"' 2>/dev/null || echo "unknown")
+echo "Current stage: $CURRENT_STAGE"
+```
+
+**When documenting interact.py interface**, check how it handles query results:
+```bash
+# Test query functionality
+if grep -q "@workflow.query" {package}/workflow.py; then
+    echo "Testing query handler..."
+
+    # Try to determine interact.py query interface
+    if grep -q "def.*query" {package}/interact.py 2>/dev/null; then
+        # Has query support - test it
+        FIRST_QUERY=$(grep -A 1 "@workflow.query" {package}/workflow.py | grep "def " | head -n 1 | sed 's/.*def \([^(]*\).*/\1/')
+
+        # Note: Different interact.py implementations may have different interfaces
+        # Common patterns:
+        #   - uv run interact query <workflow_id> <query_name>
+        #   - uv run interact <workflow_id> --query <query_name>
+        # Check interact.py usage/help for actual interface
+    fi
+fi
+```
+
 ---
 
 ## Important Notes
