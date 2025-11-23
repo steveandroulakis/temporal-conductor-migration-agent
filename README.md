@@ -2,11 +2,16 @@
 
 **Automatically convert Netflix Conductor workflows to Temporal Python projects using Claude Code.**
 
-**⚠️ NOTE:** This agent can run for 30+ minutes and cost many Anthropic tokens!
+[![Diagram explanation](./diagram.jpg)](./diagram.jpg)
 
-**⚠️ NOTE:** The agent will ask you to approve _many_ tools and code generations along the way. I would _never_ recommend doing this outside of a sandbox environment but _if you wanted to_, run `claude --dangerously-skip-permissions` to ensure the agent cooks without interruption 🍳.
+**⚠️ NOTE:** This agent can run for 30+ minutes and cost many Anthropic tokens (80k+)!
 
-[See this branch for an example of a migrated project](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test2/PROJECT_README.md). Based off the Conductor [document approvals example](https://github.com/conductor-sdk/conductor-examples/tree/main/document_approvals).
+**⚠️ NOTE:** The agent will ask you to approve _many_ tools and code generations along the way. I would _never_ recommend doing this outside of a sandbox environment but _if you wanted to_, run `claude --dangerously-skip-permissions` to ensure the agent cooks without interruption 🍳
+
+Migrated project examples:
+* [Temporal Document Approvals](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test2/PROJECT_README.md). Based off the Conductor [document approvals example](https://github.com/conductor-sdk/conductor-examples/tree/main/document_approvals).
+* [Temporal Shopping Cart](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test3/PROJECT_README.md). Based off the Conductor [shopping cart example](https://github.com/conductor-sdk/conductor-examples/tree/main/shopping_cart).
+* [Temporal Check Address (USPS)](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test4/PROJECT_README.md). Based off the Conductor [USPS check address example](https://github.com/conductor-sdk/conductor-examples/tree/main/US_post_office)
 
 ## What the agent does
 
@@ -39,18 +44,25 @@ Place your Conductor JSON workflow in:
    cd conductor-definition
    # Add your Conductor workflow.json here
    # REPLACE the example json
-   # ENSURE YOU HAVE A SINGLE JSON CONDUCTOR WORKFLOW IN THIS DIRECTORY
+   # ENSURE YOU HAVE A SINGLE CONDUCTOR PROJECT IN THIS DIRECTORY
    ```
 
 ### Step 3: Run Migration Command
 In Claude Code, execute:
 ```
-/migrate-conductor # it will find any json in this directory and migrate it to Temporal
+/migrate-conductor
 ```
+
+OR with optional context/requirements, for example:
+```
+/migrate-conductor My USPS username is steveandroulakis. If API calls fail, use mock responses as placeholders.
+```
+The arguments you provide will be passed to all agents in the pipeline, informing their code generation decisions.
 
 The pipeline will automatically:
 - Analyze your Conductor workflow
 - Generate a complete Temporal Python project
+- Use your provided context to guide activity implementations
 - Validate and fix any issues
 - Create comprehensive documentation
 
@@ -64,10 +76,6 @@ Your generated project will include:
 
 See [CLAUDE.md](./CLAUDE.md) for complete pipeline architecture and agent specifications.
 
-## Documentation
-
-- `CLAUDE.md` - Complete system architecture
-- `AGENTS.md` - Python development standards
 - `conductor-migration/` - Comprehensive migration guides
 - `.claude/` - Subagents and migration command
 
