@@ -46,14 +46,6 @@ You will create:
   - Validation commands used
   - Final status
 
-## Documentation to Reference
-
-Read these documentation files before starting:
-
-1. **`tmp-workflow-running-guide.md`** - Complete guide to Temporal CLI operations
-2. **`conductor-migration/conductor-troubleshooting.md`** - Common errors and fixes
-3. **`AGENTS.md`** - For understanding generated code structure
-
 ## Process
 
 Follow these steps autonomously:
