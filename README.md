@@ -8,7 +8,7 @@
 
 **⚠️ NOTE:** The agent will ask you to approve _many_ tools and code generations along the way. I would _never_ recommend doing this outside of a sandbox environment but _if you wanted to_, run `claude --dangerously-skip-permissions` to ensure the agent cooks without interruption 🍳
 
-Migrated project examples:
+## Migrated project examples:
 * Temporal Document Approvals. [Readme](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test2/PROJECT_README.md) // [Code](https://github.com/steveandroulakis/temporal-conductor-migration-agent/tree/claude_test2/schema_approval_temporal). Based off the Conductor [document approvals example](https://github.com/conductor-sdk/conductor-examples/tree/main/document_approvals).
 * Temporal Insurance Claim Processing. [Readme](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/insurance-claim/PROJECT_README.md) // [Code](https://github.com/steveandroulakis/temporal-conductor-migration-agent/tree/insurance-claim/insurance_claim_temporal). Based off the Conductor [insurance claim processing example](https://github.com/conductor-oss/awesome-conductor-apps/blob/960afd67a4858f28ba5ad711492748f0fb91e07a/typescript/claims-workflow/workflows/claim_workflow.json#L2)
 * Temporal Agentic Security. [Code](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/example-agentic-security-2/agentic_security_example_temporal/workflow.py). Based off the Conductor [agentic security example](https://github.com/conductor-oss/awesome-conductor-apps/tree/960afd67a4858f28ba5ad711492748f0fb91e07a/examples/agentic_security_workflow)
