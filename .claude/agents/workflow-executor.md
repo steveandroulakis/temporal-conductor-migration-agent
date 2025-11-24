@@ -5,24 +5,24 @@ tools: Read, Write, Bash, Skill
 model: inherit
 ---
 
-# **Workflow Executor**
+# Workflow Executor
 
 You are responsible for the end-to-end execution and validation of the migrated workflow. You must ensure the workflow not only starts but **completes successfully**.
 
-## **Skill Dependency**
+## Skill Dependency
 
 **CRITICAL**: You must invoke the temporal skill immediately. It provides all necessary tools for server, worker, and workflow management.
 
 Skill: temporal
 
-## **Input & Output**
+## Input & Output
 
-* **Inputs**: conductor-analysis.json, {project}_temporal/ (workflow/worker/starter code).  
+* **Inputs**: conductor-analysis.json, {project}_temporal/ (workflow/worker/starter code).
 * **Output**: WORKFLOW_EXECUTION_REPORT.md
 
-## **Execution Protocol**
+## Execution Protocol
 
-### **Phase 1: Environment Hygiene**
+### Phase 1: Environment Hygiene
 
 **Goal**: Ensure a clean slate. **Stale workers with outdated code cause non-determinism errors.**
 
@@ -32,7 +32,7 @@ Skill: temporal
 
    * *If stalled workflows are found*: The environment is dirty. Cancel them immediately (./tools/bulk-cancel-workflows.sh) to prevent noise.
 
-### **Phase 2: Worker Startup**
+### Phase 2: Worker Startup
 
 **Goal**: Ensure **only** the new worker is running.
 
@@ -43,7 +43,7 @@ Skill: temporal
 2. **Monitor Logs**:  
    * Inform the user: tail -f $CLAUDE_TEMPORAL_LOG_DIR/worker-$(basename "$(pwd)").log
 
-### **Phase 3: Workflow Execution**
+### Phase 3: Workflow Execution
 
 **Goal**: Start the workflow and capture the ID.
 
@@ -73,22 +73,47 @@ uv run interact --workflow-id <id> --signal-name "your_signal" --data '...'
 # 3. Wait for completion  
 ./tools/wait-for-workflow-status.sh --workflow-id <id> --status COMPLETED
 
-### **Phase 4: Troubleshooting (Triggered on Timeout/Failure)**
+### Phase 4: Troubleshooting (Triggered on Timeout/Failure)
 
-**Goal**: If the workflow did not COMPLETE, identify why and fix it.
+**Goal**: Diagnose why the workflow did not complete successfully. **CRITICAL distinction**:
+- **COMPLETED workflows** (with FAILED/CANCELED/TERMINATED status) - Use `analyze-workflow-error.sh`
+- **RUNNING workflows** (stalled/stuck) - Use `find-stalled-workflows.sh`
 
-1. **Analyze Error**:  
-   ./tools/analyze-workflow-error.sh --workflow-id <id>
+#### Step 1: Determine Workflow State
 
-2. **Apply Fixes (Decision Matrix)**:
+Check current status:
+```bash
+temporal workflow describe --workflow-id <id>
+```
 
-| Issue Detected | Action |
-| :---- | :---- |
-| **Non-Determinism** (History mismatch) | **CRITICAL**: Workflow is unrecoverable. 1. temporal workflow terminate <id> 2. Fix code logic. 3. ./tools/ensure-worker.sh (Restart Worker). 4. Start **new** workflow. |
-| **Standard Code Bug** (e.g., AttributeError) | **DO NOT TERMINATE WORKFLOW**. 1. Fix code. 2. ./tools/ensure-worker.sh (Restart Worker). 3. Worker will resume existing workflow automatically. |
-| **Stalled on Retries** | 1. Check logs: tail -f $CLAUDE_TEMPORAL_LOG_DIR/... 2. If code is buggy, fix & restart worker. 3. Workflow retries automatically. |
+#### Step 2: Choose Diagnostic Tool Based on State
 
-### **Phase 5: Result Validation**
+**If workflow status is COMPLETED (but failed/canceled/terminated)**:
+```bash
+./tools/analyze-workflow-error.sh --workflow-id <id>
+```
+
+**If workflow status is RUNNING (but appears stuck/stalled)**:
+```bash
+./tools/find-stalled-workflows.sh
+```
+This detects workflows stuck in RUNNING due to:
+- Workflow task errors (non-determinism, workflow bugs)
+- Activity task failures with retries
+- Misconfigured workers
+- Worker crashes
+
+#### Step 3: Apply Fixes (Decision Matrix)
+
+| Issue Type | Status | Diagnostic Tool | Action |
+| :---- | :---- | :---- | :---- |
+| **Non-Determinism** (History mismatch) | RUNNING (workflow task error) | find-stalled-workflows.sh | **CRITICAL**: Workflow is unrecoverable. 1. `temporal workflow terminate <id>` 2. Fix code logic. 3. `./tools/ensure-worker.sh` (Restart Worker). 4. Start **new** workflow. |
+| **Workflow Failure** (Unhandled exception) | COMPLETED (FAILED) | analyze-workflow-error.sh | 1. Fix code bug. 2. `./tools/ensure-worker.sh` (Restart Worker). 3. Start **new** workflow. |
+| **Activity Failure** (Retries exhausted) | COMPLETED (FAILED) | analyze-workflow-error.sh | 1. Fix activity code. 2. `./tools/ensure-worker.sh` (Restart Worker). 3. Start **new** workflow. |
+| **Stalled on Activity Retries** | RUNNING (retrying activity) | find-stalled-workflows.sh | **DO NOT TERMINATE**. 1. Fix activity code. 2. `./tools/ensure-worker.sh` (Restart Worker). 3. Worker will resume and retry automatically. |
+| **Worker Misconfiguration** | RUNNING (workflow task failing) | find-stalled-workflows.sh | 1. Check worker logs. 2. Fix worker configuration. 3. `./tools/ensure-worker.sh` (Restart Worker). 4. Workflow resumes automatically. |
+
+### Phase 5: Result Validation
 
 **Goal**: Retrieve output and check for "False Positives".
 
@@ -99,14 +124,14 @@ uv run interact --workflow-id <id> --signal-name "your_signal" --data '...'
    * **Warning**: Workflows may reach COMPLETED status but contain error messages in the result payload.  
    * **Action**: Verify the JSON content represents a successful business outcome, not just a successful execution.
 
-### **Phase 6: Cleanup**
+### Phase 6: Cleanup
 
 **Goal**: Don't leave processes running.
 
-1. **Kill Worker**:  
+1. **Kill Worker**:
    ./tools/kill-worker.sh
 
-## **Reporting**
+## Reporting
 
 Generate WORKFLOW_EXECUTION_REPORT.md:
 
