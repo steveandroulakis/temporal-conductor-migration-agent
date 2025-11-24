@@ -1,0 +1,596 @@
+{
+  "analysis_date": "2025-11-23T00:00:00Z",
+  "conductor_file": "conductor-definition/insurance_claim.json",
+  "workflow_metadata": {
+    "name": "insurance_claim",
+    "version": 1,
+    "description": "Business Process Automation -> Claims processing",
+    "inputs": [
+      "firstName",
+      "lastName"
+    ],
+    "outputs": [],
+    "timeout_seconds": 0,
+    "timeout_policy": "ALERT_ONLY",
+    "schema_version": 2,
+    "failure_workflow": "",
+    "restartable": true,
+    "owner_email": "steve.androulakis@gmail.com"
+  },
+  "project_config": {
+    "project_name": "InsuranceClaim",
+    "project_name_snake": "insurance_claim",
+    "task_queue": "insurance-claim-task-queue"
+  },
+  "tasks": [
+    {
+      "name": "findPolicyForCustomer",
+      "type": "SIMPLE",
+      "reference_name": "findPolicyForCustomer_ref",
+      "description": "Finds customer policy by first name and last name",
+      "input_parameters": {
+        "firstName": "${workflow.input.firstName}",
+        "lastName": "${workflow.input.lastName}"
+      },
+      "output_parameters": {
+        "policies": "Array of customer policies"
+      },
+      "dependencies": [],
+      "task_specific_config": {},
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Simple activity that queries customer policies by name. Returns policies array for downstream processing."
+    },
+    {
+      "name": "map_policies_to_menu_items",
+      "type": "INLINE",
+      "reference_name": "map_policies_to_menu_items_ref",
+      "description": "Prepares data for human task",
+      "input_parameters": {
+        "expression": "(function () { return $.policies.map(p => ({ \"const\": p.policy_number, title: p.policy_type })); })();",
+        "evaluatorType": "graaljs",
+        "policies": "${findPolicyForCustomer_ref.output.policies}"
+      },
+      "output_parameters": {
+        "result": "Array of menu items with policy_number and policy_type"
+      },
+      "dependencies": [
+        "findPolicyForCustomer_ref"
+      ],
+      "task_specific_config": {
+        "evaluatorType": "graaljs",
+        "transform_logic": "Maps policies array to menu items format for UI"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "INLINE task - implement as Python code in workflow. Maps policies to menu format. No activity needed - pure data transformation."
+    },
+    {
+      "name": "human",
+      "type": "HUMAN",
+      "reference_name": "take_claim_ref",
+      "description": "Form to take claims information",
+      "input_parameters": {
+        "__humanTaskDefinition": {
+          "assignmentCompletionStrategy": "LEAVE_OPEN",
+          "assignments": [],
+          "userFormTemplate": {
+            "name": "claimant_locator_form",
+            "version": 1
+          }
+        },
+        "policyValues": "${map_policies_to_menu_items_ref.output.result}"
+      },
+      "output_parameters": {
+        "policy_picker": "Selected policy ID",
+        "incident_description": "Description of the claim"
+      },
+      "dependencies": [
+        "map_policies_to_menu_items_ref"
+      ],
+      "task_specific_config": {
+        "form_template": "claimant_locator_form",
+        "completion_strategy": "LEAVE_OPEN"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "HUMAN_TASK - Use Update handler for claim submission. Human selects policy and enters incident description. Requires UI integration."
+    },
+    {
+      "name": "policy_valid",
+      "type": "SWITCH",
+      "reference_name": "policy_valid_ref",
+      "description": "Determines if the policy is valid given the claim",
+      "input_parameters": {
+        "claim_details": "${take_claim_ref.output}",
+        "policyTypes": "${map_policies_to_menu_items_ref.output.result}"
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "take_claim_ref",
+        "map_policies_to_menu_items_ref"
+      ],
+      "task_specific_config": {
+        "evaluatorType": "graaljs",
+        "expression": "(function () { const claimDetails = $.claim_details; if (claimDetails.get(\"policy_picker\")) { const policyType = $.policyTypes.find(p => p[\"const\"] === claimDetails.get(\"policy_picker\")); return policyType?.title === \"AUTO\" ? \"yes\" : \"policy-not-valid\"; } return \"policy-not-valid\" }())",
+        "decisionCases": {
+          "yes": "Policy is AUTO type - proceed with claim processing",
+          "default": "Policy is not valid - terminate"
+        }
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": true,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "SWITCH task - Translate to Python if/else. Validates policy type is AUTO. Yes case contains nested workflow (createClaimForPolicy, assesor_findings, incident_covered_by_policy). Default case terminates workflow."
+    },
+    {
+      "name": "createClaimForPolicy",
+      "type": "SIMPLE",
+      "reference_name": "createClaimForPolicy_ref",
+      "description": "Persists the claim in the database for the given policy",
+      "input_parameters": {
+        "policyId": "${take_claim_ref.output.policy_picker}",
+        "description": "${take_claim_ref.output.incident_description}"
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "take_claim_ref"
+      ],
+      "task_specific_config": {},
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "Simple activity inside policy_valid SWITCH yes case. Creates claim record in database."
+    },
+    {
+      "name": "human",
+      "type": "HUMAN",
+      "reference_name": "assesor_findings_ref",
+      "description": "Asessor fills in finding from the place of the event",
+      "input_parameters": {
+        "__humanTaskDefinition": {
+          "assignmentCompletionStrategy": "LEAVE_OPEN",
+          "assignments": [],
+          "userFormTemplate": {
+            "name": "assesor_report",
+            "version": 1
+          }
+        },
+        "visible_assesments": []
+      },
+      "output_parameters": {
+        "visible_assesments": "Array of assessment items",
+        "overall_coverage": "Coverage determination (yes/no/Not Covered)",
+        "rationale": "Assessor rationale text",
+        "incident_city": "Location of incident",
+        "incident_street": "Street address of incident",
+        "incident_state": "State of incident"
+      },
+      "dependencies": [],
+      "task_specific_config": {
+        "form_template": "assesor_report",
+        "completion_strategy": "LEAVE_OPEN"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "HUMAN_TASK inside policy_valid yes case. Assessor enters findings from incident site. Use Update handler with validation. Returns multiple output fields including assessment details and location."
+    },
+    {
+      "name": "incident_covered_by_policy",
+      "type": "SWITCH",
+      "reference_name": "incident_covered_by_policy_ref",
+      "description": "Determine if the incident is covered by the policy",
+      "input_parameters": {
+        "overall_coverage": "${assesor_findings_ref.output.overall_coverage}"
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "assesor_findings_ref"
+      ],
+      "task_specific_config": {
+        "evaluatorType": "graaljs",
+        "expression": "(function () { if($.overall_coverage!=\"Not Covered\"){ return \"yes\" } }())",
+        "decisionCases": {
+          "yes": "Incident is covered - calculate damage and proceed",
+          "default": "Incident not covered - terminate"
+        }
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": true,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Nested SWITCH inside policy_valid yes case. Checks if overall_coverage is not 'Not Covered'. Yes case contains damage calculation, cost check, and potential investigation. Default case terminates."
+    },
+    {
+      "name": "determine_price_of_damage",
+      "type": "INLINE",
+      "reference_name": "determine_price_of_damage_ref",
+      "description": "Calculate the price of the damage",
+      "input_parameters": {
+        "expression": "(function () { const costMap = { \"Side collision Damage\": 2500, \"Minor front door damage\": 500, \"Windshield Damage\": 1000 }; const items = $.assesor_findings.map(va => { const estimated_cost = costMap[va.get(\"damage_type\")]; return ({ description: va.get(\"damage_type\"), estimated_cost, coverage: va.get(\"coverage_determination\"), covered_percentage: va.get(\"coverage_score\") }); }); const totalCost = items.reduce((acc, { estimated_cost, coverage,covered_percentage }) => { const total_damage_cost = acc.total_damage_cost + estimated_cost; if (coverage === \"Not covered\") { const total_non_covered_cost = acc.total_non_covered_cost + estimated_cost; return ({ total_covered_cost: acc.total_covered_cost, total_non_covered_cost, total_damage_cost }); } const vaPercent = Number(covered_percentage) / 100; const totalToPay = estimated_cost * vaPercent; const total_covered_cost = acc.total_covered_cost + totalToPay; return ({ total_covered_cost, total_non_covered_cost: acc.total_non_covered_cost, total_damage_cost }); }, { total_covered_cost: 0, total_non_covered_cost: 0, total_damage_cost: 0 }); return { \"damage_estimation\": { \"total_damage_cost\": totalCost.total_damage_cost, \"items\": items }, \"coverage_calculation\": { \"total_covered_cost\": totalCost.total_covered_cost, \"total_non_covered_cost\": totalCost.total_non_covered_cost, \"explanation\": $.asessor_rationale } } })();",
+        "evaluatorType": "graaljs",
+        "assesor_findings": "${assesor_findings_ref.output.visible_assesments}",
+        "asessor_rationale": "${assesor_findings_ref.output.rationale}"
+      },
+      "output_parameters": {
+        "result": {
+          "damage_estimation": {
+            "total_damage_cost": "Total cost of all damage",
+            "items": "Array of damage items with costs"
+          },
+          "coverage_calculation": {
+            "total_covered_cost": "Amount covered by policy",
+            "total_non_covered_cost": "Amount not covered",
+            "explanation": "Assessor rationale"
+          }
+        }
+      },
+      "dependencies": [
+        "assesor_findings_ref"
+      ],
+      "task_specific_config": {
+        "evaluatorType": "graaljs",
+        "calculation_logic": "Maps damage types to costs, calculates coverage percentages, aggregates totals"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 3
+      },
+      "temporal_translation_notes": "Complex INLINE task inside incident_covered_by_policy yes case. Implement as Python function in workflow. Calculates damage costs using predefined cost map, applies coverage percentages, aggregates totals. Pure data transformation - no activity needed."
+    },
+    {
+      "name": "exceed_cost",
+      "type": "SWITCH",
+      "reference_name": "exceed_cost_ref",
+      "description": "Does the damage exceed a suspicious cost",
+      "input_parameters": {
+        "totalCost": "${determine_price_of_damage_ref.output.result.coverage_calculation.total_covered_cost}"
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "determine_price_of_damage_ref"
+      ],
+      "task_specific_config": {
+        "evaluatorType": "graaljs",
+        "expression": "(function () { if($.totalCost>100){ return \"yes\" } }())",
+        "decisionCases": {
+          "yes": "Cost exceeds threshold - trigger investigation",
+          "default": "Normal cost - proceed to completion"
+        },
+        "cost_threshold": 100
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": true,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 3
+      },
+      "temporal_translation_notes": "Nested SWITCH inside incident_covered_by_policy yes case. Checks if total_covered_cost > 100. Yes case triggers investigation HUMAN task. After switch, workflow proceeds to terminate_ref_2 for completion."
+    },
+    {
+      "name": "human",
+      "type": "HUMAN",
+      "reference_name": "investigation_human_ref",
+      "description": "Form for an additional investigation",
+      "input_parameters": {
+        "__humanTaskDefinition": {
+          "assignmentCompletionStrategy": "LEAVE_OPEN",
+          "assignments": [],
+          "userFormTemplate": {
+            "name": "on_site_investigation",
+            "version": 1
+          }
+        },
+        "investigation_city": "${assesor_findings_ref.output.incident_city}",
+        "investigation_street": "${assesor_findings_ref.output.incident_street}",
+        "investigation_state": "${assesor_findings_ref.output.incident_state}",
+        "witness_statements": []
+      },
+      "output_parameters": {
+        "investigation_findings": "Results from on-site investigation"
+      },
+      "dependencies": [
+        "assesor_findings_ref"
+      ],
+      "task_specific_config": {
+        "form_template": "on_site_investigation",
+        "completion_strategy": "LEAVE_OPEN"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 4
+      },
+      "temporal_translation_notes": "HUMAN_TASK inside exceed_cost yes case (deep nesting level 4). On-site investigation form for high-cost claims. Use Update handler."
+    },
+    {
+      "name": "after_investigation_is_it_covered",
+      "type": "SWITCH",
+      "reference_name": "after_investigation_is_it_covered_ref",
+      "description": "Given the new findings is the claim really covered",
+      "input_parameters": {
+        "switchCaseValue": "${incident_covered_by_policy_ref.output.covered}"
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "incident_covered_by_policy_ref"
+      ],
+      "task_specific_config": {
+        "evaluatorType": "graaljs",
+        "expression": "(function () { if ($.switchCaseValue) { return \"yes\" } }())",
+        "decisionCases": {
+          "yes": "Still covered after investigation - proceed",
+          "default": "Not covered after investigation - terminate"
+        }
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": true,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 4
+      },
+      "temporal_translation_notes": "Deeply nested SWITCH (level 4) inside exceed_cost yes case. Re-evaluates coverage after investigation. Default case contains TERMINATE task. Note: References incident_covered_by_policy_ref.output.covered but this is not clearly set - may need clarification or use investigation findings."
+    },
+    {
+      "name": "terminate",
+      "type": "TERMINATE",
+      "reference_name": "terminate_ref",
+      "description": "Terminated after investigation.Incident not covered",
+      "input_parameters": {
+        "terminationStatus": "TERMINATED",
+        "terminationReason": "Terminated after investigation.Incident not covered"
+      },
+      "output_parameters": {},
+      "dependencies": [],
+      "task_specific_config": {
+        "status": "TERMINATED",
+        "reason": "Incident not covered after investigation"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 5
+      },
+      "temporal_translation_notes": "TERMINATE task in after_investigation_is_it_covered default case. Return failure result from workflow with termination reason."
+    },
+    {
+      "name": "terminate_2",
+      "type": "TERMINATE",
+      "reference_name": "terminate_ref_2",
+      "description": "Terminated send the payment to the client",
+      "input_parameters": {
+        "terminationStatus": "COMPLETED",
+        "terminationReason": "Send Payment to client"
+      },
+      "output_parameters": {},
+      "dependencies": [],
+      "task_specific_config": {
+        "status": "COMPLETED",
+        "reason": "Send payment to client"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 3
+      },
+      "temporal_translation_notes": "Success TERMINATE task after exceed_cost processing. This executes after the exceed_cost SWITCH completes (regardless of yes/default case). Return success result from workflow."
+    },
+    {
+      "name": "terminate_1",
+      "type": "TERMINATE",
+      "reference_name": "terminate_ref_1",
+      "description": "Terminated because the policy does not cover the incident",
+      "input_parameters": {
+        "terminationStatus": "TERMINATED",
+        "terminationReason": "Policy does not cover incident"
+      },
+      "output_parameters": {},
+      "dependencies": [],
+      "task_specific_config": {
+        "status": "TERMINATED",
+        "reason": "Policy does not cover incident"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 3
+      },
+      "temporal_translation_notes": "TERMINATE task in incident_covered_by_policy default case. Return failure result from workflow."
+    },
+    {
+      "name": "terminate_by_invalid_policy",
+      "type": "TERMINATE",
+      "reference_name": "terminate_by_invalid_policy_ref",
+      "description": "Terminated because of invalid policy",
+      "input_parameters": {
+        "terminationStatus": "TERMINATED",
+        "terminationReason": "Terminated because of invalid policy",
+        "workflowOutput": {
+          "error": "Invalid policy ${${take_claim_ref.output.policy_picker}"
+        }
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "take_claim_ref"
+      ],
+      "task_specific_config": {
+        "status": "TERMINATED",
+        "reason": "Invalid policy"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "TERMINATE task in policy_valid default case. Return failure result from workflow with invalid policy error."
+    }
+  ],
+  "human_interaction_patterns": [
+    {
+      "task_reference": "take_claim_ref",
+      "task_name": "human",
+      "pattern_type": "human_task",
+      "recommended_mechanism": "update",
+      "data_flow": [
+        "${take_claim_ref.output.policy_picker}",
+        "${take_claim_ref.output.incident_description}"
+      ],
+      "timeout_behavior": "No explicit timeout configured - recommend adding timeout with escalation",
+      "notes": "First human interaction - claimant submits claim details. Use Update handler with validation to ensure policy_picker is valid. Returns policy selection and incident description. Critical path - workflow cannot proceed without this input."
+    },
+    {
+      "task_reference": "assesor_findings_ref",
+      "task_name": "human",
+      "pattern_type": "human_task",
+      "recommended_mechanism": "update",
+      "data_flow": [
+        "${assesor_findings_ref.output.visible_assesments}",
+        "${assesor_findings_ref.output.overall_coverage}",
+        "${assesor_findings_ref.output.rationale}",
+        "${assesor_findings_ref.output.incident_city}",
+        "${assesor_findings_ref.output.incident_street}",
+        "${assesor_findings_ref.output.incident_state}"
+      ],
+      "timeout_behavior": "No explicit timeout - recommend timeout with escalation or default rejection",
+      "notes": "Assessor evaluation after claim creation. Use Update handler to receive assessment findings. Returns complex data including assessment array, coverage determination, location details. This drives downstream coverage decision."
+    },
+    {
+      "task_reference": "investigation_human_ref",
+      "task_name": "human",
+      "pattern_type": "human_task",
+      "recommended_mechanism": "update",
+      "data_flow": [
+        "${investigation_human_ref.output.investigation_findings}"
+      ],
+      "timeout_behavior": "No explicit timeout - recommend timeout as high-cost claims need timely investigation",
+      "notes": "On-site investigation for high-cost claims (>100). Triggered only when exceed_cost returns 'yes'. Use Update handler. Investigation findings should influence final coverage decision. Deeply nested (level 4) - ensure proper state management."
+    }
+  ],
+  "control_flow_summary": {
+    "max_nesting_depth": 5,
+    "has_loops": false,
+    "has_parallel_execution": false,
+    "has_dynamic_parallelism": false,
+    "has_sub_workflows": false,
+    "complexity_score": "high",
+    "complexity_factors": [
+      "Deep nesting: 5 levels (policy_valid -> incident_covered_by_policy -> exceed_cost -> investigation -> after_investigation -> terminate)",
+      "Multiple nested SWITCH tasks: 4 SWITCH tasks at different nesting levels",
+      "3 HUMAN_TASK tasks requiring external input and state management",
+      "2 complex INLINE tasks with significant JavaScript logic for data transformation",
+      "Multiple termination paths with different outcomes (4 TERMINATE tasks)",
+      "Complex data flow: outputs from early tasks used deep in nested structures",
+      "Conditional branching at each level affects overall execution path significantly"
+    ]
+  },
+  "data_flow": {
+    "workflow_inputs_used": [
+      "${workflow.input.firstName}",
+      "${workflow.input.lastName}"
+    ],
+    "task_output_references": [
+      "${findPolicyForCustomer_ref.output.policies}",
+      "${map_policies_to_menu_items_ref.output.result}",
+      "${take_claim_ref.output}",
+      "${take_claim_ref.output.policy_picker}",
+      "${take_claim_ref.output.incident_description}",
+      "${assesor_findings_ref.output.visible_assesments}",
+      "${assesor_findings_ref.output.overall_coverage}",
+      "${assesor_findings_ref.output.rationale}",
+      "${assesor_findings_ref.output.incident_city}",
+      "${assesor_findings_ref.output.incident_street}",
+      "${assesor_findings_ref.output.incident_state}",
+      "${incident_covered_by_policy_ref.output.covered}",
+      "${determine_price_of_damage_ref.output.result.coverage_calculation.total_covered_cost}",
+      "${determine_price_of_damage_ref.output.result.damage_estimation}",
+      "${determine_price_of_damage_ref.output.result.coverage_calculation}"
+    ],
+    "jsonpath_expressions": [
+      "$.policies.map(p => ({ \"const\": p.policy_number, title: p.policy_type }))",
+      "$.claim_details",
+      "$.policyTypes.find(p => p[\"const\"] === claimDetails.get(\"policy_picker\"))",
+      "$.overall_coverage",
+      "$.assesor_findings.map(va => ...)",
+      "items.reduce((acc, { estimated_cost, coverage, covered_percentage }) => ...)",
+      "$.totalCost",
+      "$.switchCaseValue"
+    ],
+    "workflow_variables": []
+  },
+  "recommended_patterns": {
+    "human_interaction": "Updates recommended for all 3 HUMAN tasks (take_claim_ref, assesor_findings_ref, investigation_human_ref) with validation and timeout handling. Consider implementing escalation logic for timeouts.",
+    "error_handling": "Add RetryPolicy to findPolicyForCustomer and createClaimForPolicy activities (database operations). Consider non-retryable failures for invalid policy scenarios.",
+    "parallel_execution": "No parallel execution in current workflow. All tasks are sequential or nested in conditional branches.",
+    "loop_handling": "No loops present in this workflow.",
+    "special_considerations": [
+      "Deep nesting (5 levels) requires careful state management and helper methods in workflow",
+      "Complex INLINE tasks (map_policies_to_menu_items_ref, determine_price_of_damage_ref) should be implemented as pure Python functions in workflow - no activities needed",
+      "Multiple termination paths require clear result types to distinguish success vs failure outcomes",
+      "HUMAN tasks at different nesting levels need coordinated state management",
+      "Cost threshold (100) in exceed_cost is hardcoded - consider making configurable",
+      "Data transformation logic in INLINE tasks is complex - ensure accurate Python translation",
+      "Investigation flow (investigation_human_ref -> after_investigation_is_it_covered_ref) references incident_covered_by_policy_ref.output.covered which may not be properly set - verify logic",
+      "Consider adding workflow queries to check current state and progress through deeply nested structure",
+      "Form templates (claimant_locator_form, assesor_report, on_site_investigation) need to be implemented in separate UI layer"
+    ]
+  },
+  "translation_notes": [
+    "INLINE tasks contain complex JavaScript (graaljs) expressions that must be carefully translated to Python - preserve calculation logic exactly",
+    "The workflow has 4 different termination outcomes: invalid policy, incident not covered, investigation failure, successful completion - ensure clear result types",
+    "Reference ${incident_covered_by_policy_ref.output.covered} in after_investigation_is_it_covered_ref may be problematic - SWITCH tasks don't typically have 'covered' output field. May need to track this state separately or use investigation findings.",
+    "Nested SWITCH tasks create complex if/elif/else structures - use helper methods to improve readability",
+    "Cost map in determine_price_of_damage_ref should be defined as constant in workflow class",
+    "HUMAN task outputs have variable schemas - ensure dataclasses accommodate all fields",
+    "The workflow has no explicit timeout configuration (timeoutSeconds: 0) - recommend adding workflow execution timeout",
+    "Assignment strategy 'LEAVE_OPEN' suggests tasks remain available until completed - implement appropriate wait_condition logic",
+    "Consider implementing workflow queries for: current_stage, awaiting_input, claim_summary, coverage_estimate",
+    "Form template versions are specified - document in migration notes that UI must implement matching form versions",
+    "The exceed_cost threshold of 100 is quite low (likely for demo purposes) - document that this should be adjusted for production"
+  ]
+}
