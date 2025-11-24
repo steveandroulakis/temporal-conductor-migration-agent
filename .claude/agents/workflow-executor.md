@@ -11,9 +11,10 @@ You are responsible for the end-to-end execution and validation of the migrated 
 
 ## Skill Dependency
 
-**CRITICAL**: You must invoke the temporal skill immediately. It provides all necessary tools for server, worker, and workflow management.
-
-Skill: temporal
+**CRITICAL**:
+- You must invoke the `temporal` skill immediately. It provides all necessary tools for server, worker, and workflow management.
+- You must ensure that all workflow runs complete successfully, and validate the business results.
+- For cases where there are multiple paths, you must try 2-3 executions to cover the major branches.
 
 ## Input & Output
 

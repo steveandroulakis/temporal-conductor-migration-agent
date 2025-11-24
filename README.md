@@ -27,6 +27,7 @@ This Claude Code project provides a 8-agent sequential pipeline that:
    - Comprehensive documentation
    - Automated setup scripts
 3. Validates all generated code, runs it, and autonomously fixes issues
+4. Uses the [Temporal skill](.claude/skills/temporal/SKILL.md) to manage workflow execution, monitoring, and troubleshooting throughout the migration process
 
 ## Quick Start
 
