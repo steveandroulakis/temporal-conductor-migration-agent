@@ -1,0 +1,778 @@
+{
+  "analysis_date": "2025-11-23T00:00:00Z",
+  "conductor_file": "conductor-definition/Agentic_Security_Example.json",
+  "workflow_metadata": {
+    "name": "Agentic_Security_Example",
+    "version": 1,
+    "description": "Extract security alerts and initiate scans and deep visibility threat hunts.",
+    "inputs": [
+      "notification_channel",
+      "recipient_role",
+      "security_malsite_alerts",
+      "security_malware_alerts"
+    ],
+    "outputs": [
+      "notified_channel",
+      "action_recommendation"
+    ],
+    "timeout_seconds": 0,
+    "timeout_policy": "ALERT_ONLY",
+    "schema_version": 2,
+    "restartable": true
+  },
+  "project_config": {
+    "project_name": "AgenticSecurityExample",
+    "project_name_snake": "agentic_security_example",
+    "task_queue": "agentic-security-example-task-queue"
+  },
+  "tasks": [
+    {
+      "name": "get_start_time",
+      "type": "INLINE",
+      "reference_name": "get_start_time_ref",
+      "description": "Inline JavaScript task to get current timestamp",
+      "input_parameters": {
+        "expression": "(function getTimeNowAndThirtyDaysAgo() {\n  const now = new Date();\n \n  return {\n    currentTime: now.toISOString()\n  };\n}\n)\n();",
+        "evaluatorType": "graaljs"
+      },
+      "output_parameters": {},
+      "dependencies": [],
+      "task_specific_config": {
+        "evaluator_type": "graaljs",
+        "inline_code_purpose": "Generate current timestamp"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Execute JavaScript inline as Python datetime code in workflow: datetime.now(timezone.utc).isoformat()"
+    },
+    {
+      "name": "get_alerts_calls_fork",
+      "type": "FORK_JOIN",
+      "reference_name": "get_alerts_calls_fork_ref",
+      "description": "Parallel execution of malware and malsite alert processing",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": [
+        "get_start_time_ref"
+      ],
+      "task_specific_config": {
+        "fork_branches": 2,
+        "branch_1": [
+          "mock_security_malware_alerts_ref",
+          "extract_malware_alerts_ref"
+        ],
+        "branch_2": [
+          "mock_security_malsite_alerts_ref",
+          "extract_malsite_alerts_ref",
+          "get_device_id_dynamic_fork_ref",
+          "get_device_id_dynamic_join_ref",
+          "extract_malsite_devices_ref"
+        ]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": true,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Use asyncio.gather() to execute both branches in parallel. Branch 2 has nested DYNAMIC_FORK requiring sub-workflow."
+    },
+    {
+      "name": "mock_security_malware_alerts",
+      "type": "INLINE",
+      "reference_name": "mock_security_malware_alerts_ref",
+      "description": "Mock malware alerts data with default values",
+      "input_parameters": {
+        "expression": "Complex JavaScript returning mock malware alerts with 5 security incidents",
+        "evaluatorType": "graaljs",
+        "security_malware_alerts": "${workflow.input.security_malware_alerts}"
+      },
+      "output_parameters": {
+        "result": {
+          "alerts": "Array of 5 malware alert objects with device_id, sha256, md5, user fields"
+        }
+      },
+      "dependencies": [],
+      "task_specific_config": {
+        "evaluator_type": "graaljs",
+        "inline_code_purpose": "Provide default malware alert data if not in workflow input"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "Implement as Python function in workflow returning mock data. Use workflow.input to check for custom data."
+    },
+    {
+      "name": "extract_malware_alerts",
+      "type": "JSON_JQ_TRANSFORM",
+      "reference_name": "extract_malware_alerts_ref",
+      "description": "JQ transform to extract malware device IDs, SHA256s, users, MD5s",
+      "input_parameters": {
+        "alerts": "${mock_security_malware_alerts_ref.output.result.result.alerts}",
+        "queryExpression": "JQ expression extracting device_id, local_sha256, user, md5 arrays"
+      },
+      "output_parameters": {
+        "result": {
+          "malware_device_ids": "Array of {device_id: string}",
+          "mw_sha256s": "Array of {local_sha256: string}",
+          "malsite_users": "Array of {user: string}",
+          "malware_md5s": "Array of {md5: string}"
+        }
+      },
+      "dependencies": [
+        "mock_security_malware_alerts_ref"
+      ],
+      "task_specific_config": {
+        "jq_query": "Extract and filter device IDs, SHA256s, users, MD5s from alert array"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "Implement as Python activity using list comprehensions or jq library (pyjq). Extract specified fields from alerts array."
+    },
+    {
+      "name": "mock_security_malsite_alerts",
+      "type": "INLINE",
+      "reference_name": "mock_security_malsite_alerts_ref",
+      "description": "Mock malicious site alerts data with default values",
+      "input_parameters": {
+        "expression": "Complex JavaScript returning mock malsite alerts with 9 security incidents",
+        "evaluatorType": "graaljs",
+        "security_malsite_alerts": "${workflow.input.security_malsite_alerts}"
+      },
+      "output_parameters": {
+        "result": {
+          "alerts": "Array of 9 malsite alert objects with user, hostname, domain fields"
+        }
+      },
+      "dependencies": [],
+      "task_specific_config": {
+        "evaluator_type": "graaljs",
+        "inline_code_purpose": "Provide default malsite alert data if not in workflow input"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "Implement as Python function in workflow returning mock data. Use workflow.input to check for custom data."
+    },
+    {
+      "name": "extract_malsite_alerts",
+      "type": "JSON_JQ_TRANSFORM",
+      "reference_name": "extract_malsite_alerts_ref",
+      "description": "JQ transform to extract malsite users and hostnames",
+      "input_parameters": {
+        "alerts": "${mock_security_malsite_alerts_ref.output.result.result.alerts}",
+        "queryExpression": "JQ expression extracting user and hostname arrays"
+      },
+      "output_parameters": {
+        "result": {
+          "malsite_users": "Array of {user: string}",
+          "malsite_hostnames": "Array of {hostname: string}"
+        }
+      },
+      "dependencies": [
+        "mock_security_malsite_alerts_ref"
+      ],
+      "task_specific_config": {
+        "jq_query": "Extract and filter users and hostnames from alert array"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "Implement as Python activity using list comprehensions or jq library (pyjq). Extract specified fields from alerts array."
+    },
+    {
+      "name": "get_device_id_dynamic_fork",
+      "type": "FORK_JOIN_DYNAMIC",
+      "reference_name": "get_device_id_dynamic_fork_ref",
+      "description": "Dynamic parallel execution of security_get_device_id sub-workflow for each hostname",
+      "input_parameters": {
+        "forkTaskWorkflow": "security_get_device_id",
+        "forkTaskInputs": "${extract_malsite_alerts_ref.output.result.malsite_hostnames}"
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "extract_malsite_alerts_ref"
+      ],
+      "task_specific_config": {
+        "dynamic_fork_workflow": "security_get_device_id",
+        "fork_input_source": "malsite_hostnames array",
+        "parallelism": "dynamic based on hostname count"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": true,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Use list comprehension + asyncio.gather() to execute child workflow (security_get_device_id) for each hostname. Each hostname triggers one child workflow execution."
+    },
+    {
+      "name": "get_device_id_dynamic_join",
+      "type": "JOIN",
+      "reference_name": "get_device_id_dynamic_join_ref",
+      "description": "Join for dynamic fork completion",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": [
+        "get_device_id_dynamic_fork_ref"
+      ],
+      "task_specific_config": {
+        "join_on": [
+          "get_device_id_dynamic_join_ref"
+        ]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Implicit in asyncio.gather() - no explicit join needed in Temporal. Results collected automatically."
+    },
+    {
+      "name": "extract_malsite_devices",
+      "type": "JSON_JQ_TRANSFORM",
+      "reference_name": "extract_malsite_devices_ref",
+      "description": "JQ transform to extract device IDs from joined output",
+      "input_parameters": {
+        "join_output": "${get_device_id_dynamic_join_ref.output}",
+        "queryExpression": "JQ expression extracting device_id array from joined results"
+      },
+      "output_parameters": {
+        "result": {
+          "malsite_device_ids": "Array of {device_id: string}"
+        }
+      },
+      "dependencies": [
+        "get_device_id_dynamic_join_ref"
+      ],
+      "task_specific_config": {
+        "jq_query": "Extract device_id fields from array of child workflow results"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Implement as Python activity using list comprehensions. Process results from asyncio.gather() of child workflows."
+    },
+    {
+      "name": "security_calls_join",
+      "type": "JOIN",
+      "reference_name": "security_calls_join_ref",
+      "description": "Join for main fork completion",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": [
+        "extract_malware_alerts_ref",
+        "extract_malsite_devices_ref"
+      ],
+      "task_specific_config": {
+        "join_on": [
+          "extract_malware_alerts_ref",
+          "extract_malsite_devices_ref"
+        ]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Implicit in asyncio.gather() - no explicit join needed. Results from both branches available after gather completes."
+    },
+    {
+      "name": "llm_alert_analysis",
+      "type": "LLM_TEXT_COMPLETE",
+      "reference_name": "llm_alert_analysis_ref",
+      "description": "LLM-based analysis of security alerts using GPT-4o-mini",
+      "input_parameters": {
+        "llmProvider": "openai",
+        "model": "gpt-4o-mini",
+        "promptName": "llm_alert_analysis",
+        "maxTokens": 16384,
+        "jsonOutput": true,
+        "promptVariables": {
+          "malsite_alerts_data": "${mock_security_malsite_alerts_ref.output.result}",
+          "malware_alerts_data": "${mock_security_malware_alerts_ref.output.result}"
+        }
+      },
+      "output_parameters": {
+        "result": "LLM analysis with suspected_sha256s, suspected_devices, suspected_users, threat_clusters"
+      },
+      "dependencies": [
+        "security_calls_join_ref"
+      ],
+      "task_specific_config": {
+        "llm_provider": "openai",
+        "model": "gpt-4o-mini",
+        "prompt_name": "llm_alert_analysis",
+        "max_tokens": 16384,
+        "json_output": true
+      },
+      "retry_config": {
+        "recommended_retry_count": 3,
+        "recommended_retry_logic": "EXPONENTIAL_BACKOFF",
+        "recommended_initial_interval_seconds": 10
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Implement as Python activity using OpenAI SDK. Use OPENAI_API_KEY from environment. Implement retry policy for API failures."
+    },
+    {
+      "name": "validate_llm_findings",
+      "type": "INLINE",
+      "reference_name": "validate_llm_findings_ref",
+      "description": "Complex JavaScript validation comparing LLM findings against extracted data",
+      "input_parameters": {
+        "llm_output": "${llm_alert_analysis_ref.output.result}",
+        "extracted_malware_sha256s": "${extract_malware_alerts_ref.output.result.mw_sha256s}",
+        "extracted_malware_devices": "${extract_malware_alerts_ref.output.result.malware_device_ids}",
+        "extracted_malsite_devices": "${extract_malsite_devices_ref.output.result.malsite_device_ids}",
+        "extracted_malware_users": "${extract_malware_alerts_ref.output.result.malware_users}",
+        "extracted_malsite_users": "${extract_malsite_alerts_ref.output.result.malsite_users}",
+        "evaluatorType": "graaljs",
+        "expression": "Complex JavaScript validation logic calculating accuracy and priority"
+      },
+      "output_parameters": {
+        "result": {
+          "sha256_validation": "Object with high_priority and low_priority arrays",
+          "device_validation": "Object with high_priority and low_priority arrays",
+          "user_validation": "Object with high_priority and low_priority arrays",
+          "summary": "Accuracy statistics",
+          "action_recommendation": "String recommendation",
+          "deep_scan": "Boolean indicating if threat clusters found"
+        }
+      },
+      "dependencies": [
+        "llm_alert_analysis_ref",
+        "extract_malware_alerts_ref",
+        "extract_malsite_devices_ref"
+      ],
+      "task_specific_config": {
+        "evaluator_type": "graaljs",
+        "inline_code_purpose": "Cross-validate LLM findings with actual extracted data and calculate accuracy metrics"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Implement as Python code in workflow. Translate JavaScript validation logic to Python using sets for intersection checks."
+    },
+    {
+      "name": "decide_visionone_follow_ups",
+      "type": "SWITCH",
+      "reference_name": "decide_visionone_follow_ups_ref",
+      "description": "Conditional decision on whether to initiate deep scans based on LLM validation",
+      "input_parameters": {
+        "deep_scan_required": "${validate_llm_findings_ref.output.result.deep_scan}"
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "validate_llm_findings_ref"
+      ],
+      "task_specific_config": {
+        "evaluator_type": "graaljs",
+        "expression": "(function () {\n  return !!$.deep_scan_required;\n})();",
+        "decision_cases": {
+          "true": [
+            "alert_follow_up_actions_fork_ref",
+            "alert_follow_up_actions_join_ref"
+          ]
+        },
+        "default_case": []
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": true,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Use Python if statement: if validate_result.deep_scan: execute nested fork_join with 3 dynamic forks"
+    },
+    {
+      "name": "alert_follow_up_actions_fork",
+      "type": "FORK_JOIN",
+      "reference_name": "alert_follow_up_actions_fork_ref",
+      "description": "Nested parallel execution of 3 dynamic forks for threat hunts and device scans",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": [
+        "decide_visionone_follow_ups_ref"
+      ],
+      "task_specific_config": {
+        "fork_branches": 3,
+        "branch_1": [
+          "last_30_days_threat_hunt_dynamic_fork_ref",
+          "last_30_days_threat_hunt_join_ref"
+        ],
+        "branch_2": [
+          "infected_device_scans_dynamic_fork_ref",
+          "infected_device_scans_join_ref"
+        ],
+        "branch_3": [
+          "malsite_visited_device_scans_dynamic_fork_ref",
+          "malsite_visited_device_scans_join_ref"
+        ]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": true,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "Use asyncio.gather() to execute all 3 dynamic fork operations in parallel. Each branch executes a child workflow for each input item."
+    },
+    {
+      "name": "last_30_days_threat_hunt_dynamic_fork",
+      "type": "FORK_JOIN_DYNAMIC",
+      "reference_name": "last_30_days_threat_hunt_dynamic_fork_ref",
+      "description": "Dynamic parallel execution of threat hunt sub-workflow for each SHA256",
+      "input_parameters": {
+        "forkTaskWorkflow": "vision_one_deep_visibility_hunt",
+        "forkTaskInputs": "${extract_malware_alerts_ref.output.result.mw_sha256s}"
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "alert_follow_up_actions_fork_ref"
+      ],
+      "task_specific_config": {
+        "dynamic_fork_workflow": "vision_one_deep_visibility_hunt",
+        "fork_input_source": "mw_sha256s array",
+        "parallelism": "dynamic based on SHA256 count"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": true,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Use list comprehension + asyncio.gather() to execute child workflow for each SHA256 hash."
+    },
+    {
+      "name": "last_30_days_threat_hunt_join",
+      "type": "JOIN",
+      "reference_name": "last_30_days_threat_hunt_join_ref",
+      "description": "Join for threat hunt dynamic fork",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": [
+        "last_30_days_threat_hunt_dynamic_fork_ref"
+      ],
+      "task_specific_config": {},
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Implicit in asyncio.gather() - no explicit join needed."
+    },
+    {
+      "name": "infected_device_scans_dynamic_fork",
+      "type": "FORK_JOIN_DYNAMIC",
+      "reference_name": "infected_device_scans_dynamic_fork_ref",
+      "description": "Dynamic parallel execution of device scan sub-workflow for malware-infected devices",
+      "input_parameters": {
+        "forkTaskWorkflow": "vision_one_device_scan",
+        "forkTaskInputs": "${extract_malware_alerts_ref.output.result.malware_device_ids}"
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "alert_follow_up_actions_fork_ref"
+      ],
+      "task_specific_config": {
+        "dynamic_fork_workflow": "vision_one_device_scan",
+        "fork_input_source": "malware_device_ids array",
+        "parallelism": "dynamic based on device count"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": true,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Use list comprehension + asyncio.gather() to execute child workflow for each infected device ID."
+    },
+    {
+      "name": "infected_device_scans_join",
+      "type": "JOIN",
+      "reference_name": "infected_device_scans_join_ref",
+      "description": "Join for infected device scans",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": [
+        "infected_device_scans_dynamic_fork_ref"
+      ],
+      "task_specific_config": {},
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Implicit in asyncio.gather() - no explicit join needed."
+    },
+    {
+      "name": "malsite_visited_device_scans_dynamic_fork",
+      "type": "FORK_JOIN_DYNAMIC",
+      "reference_name": "malsite_visited_device_scans_dynamic_fork_ref",
+      "description": "Dynamic parallel execution of device scan sub-workflow for malsite-visiting devices",
+      "input_parameters": {
+        "forkTaskWorkflow": "vision_one_device_scan",
+        "forkTaskInputs": "${extract_malsite_devices_ref.output.result.malsite_device_ids}"
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "alert_follow_up_actions_fork_ref"
+      ],
+      "task_specific_config": {
+        "dynamic_fork_workflow": "vision_one_device_scan",
+        "fork_input_source": "malsite_device_ids array",
+        "parallelism": "dynamic based on device count"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": true,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Use list comprehension + asyncio.gather() to execute child workflow for each malsite-visiting device ID."
+    },
+    {
+      "name": "malsite_visited_device_scans_join",
+      "type": "JOIN",
+      "reference_name": "malsite_visited_device_scans_join_ref",
+      "description": "Join for malsite device scans",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": [
+        "malsite_visited_device_scans_dynamic_fork_ref"
+      ],
+      "task_specific_config": {},
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 2
+      },
+      "temporal_translation_notes": "Implicit in asyncio.gather() - no explicit join needed."
+    },
+    {
+      "name": "alert_follow_up_actions_join",
+      "type": "JOIN",
+      "reference_name": "alert_follow_up_actions_join_ref",
+      "description": "Join for alert follow-up actions fork",
+      "input_parameters": {},
+      "output_parameters": {},
+      "dependencies": [
+        "last_30_days_threat_hunt_join_ref",
+        "infected_device_scans_join_ref",
+        "malsite_visited_device_scans_join_ref"
+      ],
+      "task_specific_config": {
+        "join_on": [
+          "last_30_days_threat_hunt_join_ref",
+          "infected_device_scans_join_ref",
+          "malsite_visited_device_scans_join_ref"
+        ]
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 1
+      },
+      "temporal_translation_notes": "Implicit in asyncio.gather() - no explicit join needed. Results from all 3 parallel branches available."
+    },
+    {
+      "name": "generate_message_body",
+      "type": "INLINE",
+      "reference_name": "generate_message_body_ref",
+      "description": "JavaScript code to generate HTML email body from scan results",
+      "input_parameters": {
+        "expression": "Complex JavaScript generating HTML email with device lists, users, hashes",
+        "evaluatorType": "graaljs",
+        "malsite_devices": "${extract_malsite_devices_ref.output.result}",
+        "malware_alerts": "${extract_malware_alerts_ref.output.result}",
+        "malsite_users": "${extract_malsite_alerts_ref.output.result}"
+      },
+      "output_parameters": {
+        "result": "HTML email body string"
+      },
+      "dependencies": [
+        "extract_malsite_devices_ref",
+        "extract_malware_alerts_ref",
+        "extract_malsite_alerts_ref"
+      ],
+      "task_specific_config": {
+        "evaluator_type": "graaljs",
+        "inline_code_purpose": "Generate formatted email body with scan results"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Implement as Python code in workflow. Use string formatting or Jinja2 templates to generate HTML email."
+    },
+    {
+      "name": "notify_channels_subwf",
+      "type": "SUB_WORKFLOW",
+      "reference_name": "notify_channels_subwf_ref",
+      "description": "Sub-workflow to send notifications via specified channel",
+      "input_parameters": {
+        "notification_type": "${workflow.input.notification_channel}",
+        "notification_from": "templates-dev@orkes.io",
+        "notification_to": "templates-dev@orkes.io",
+        "notification_message": "${generate_message_body_ref.output.result}"
+      },
+      "output_parameters": {
+        "notified_channel": "Channel that was notified"
+      },
+      "dependencies": [
+        "generate_message_body_ref"
+      ],
+      "task_specific_config": {
+        "sub_workflow_name": "Notify-Channels-x-mocked"
+      },
+      "retry_config": {},
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Use workflow.execute_child_workflow() to execute NotifyChannels workflow. Pass notification parameters."
+    }
+  ],
+  "human_interaction_patterns": [],
+  "control_flow_summary": {
+    "max_nesting_depth": 2,
+    "has_loops": false,
+    "has_parallel_execution": true,
+    "has_dynamic_parallelism": true,
+    "has_sub_workflows": true,
+    "complexity_score": "high",
+    "complexity_factors": [
+      "Multiple nested FORK_JOIN structures (2 levels deep)",
+      "4 DYNAMIC_FORK tasks requiring child workflow execution",
+      "Nested SWITCH containing FORK_JOIN with 3 parallel DYNAMIC_FORKs",
+      "Complex data transformations using JQ and inline JavaScript",
+      "LLM integration requiring external API calls",
+      "Multiple sub-workflow calls (5 total: security_get_device_id, vision_one_deep_visibility_hunt, vision_one_device_scan x2, Notify-Channels-x-mocked)",
+      "Deep data dependencies across multiple task layers"
+    ]
+  },
+  "data_flow": {
+    "workflow_inputs_used": [
+      "${workflow.input.notification_channel}",
+      "${workflow.input.security_malsite_alerts}",
+      "${workflow.input.security_malware_alerts}"
+    ],
+    "task_output_references": [
+      "${mock_security_malware_alerts_ref.output.result.result.alerts}",
+      "${mock_security_malsite_alerts_ref.output.result.result.alerts}",
+      "${extract_malware_alerts_ref.output.result.mw_sha256s}",
+      "${extract_malware_alerts_ref.output.result.malware_device_ids}",
+      "${extract_malware_alerts_ref.output.result.malware_users}",
+      "${extract_malware_alerts_ref.output.result.malware_md5s}",
+      "${extract_malsite_alerts_ref.output.result.malsite_hostnames}",
+      "${extract_malsite_alerts_ref.output.result.malsite_users}",
+      "${get_device_id_dynamic_join_ref.output}",
+      "${extract_malsite_devices_ref.output.result.malsite_device_ids}",
+      "${llm_alert_analysis_ref.output.result}",
+      "${validate_llm_findings_ref.output.result.deep_scan}",
+      "${validate_llm_findings_ref.output.action_recommendation}",
+      "${generate_message_body_ref.output.result}",
+      "${notify_channels_subwf_ref.output.notified_channel}"
+    ],
+    "jsonpath_expressions": [
+      "$.security_malware_alerts",
+      "$.security_malsite_alerts",
+      "$.deep_scan_required",
+      "$.llm_output",
+      "$.extracted_malware_sha256s",
+      "$.malsite_devices",
+      "$.malware_alerts",
+      "$.malsite_users"
+    ],
+    "workflow_variables": []
+  },
+  "recommended_patterns": {
+    "human_interaction": "No human interaction patterns detected. Workflow is fully automated.",
+    "error_handling": "RetryPolicy recommended for: llm_alert_analysis (OpenAI API calls), all DYNAMIC_FORK child workflows (external service calls)",
+    "parallel_execution": "asyncio.gather recommended for: main FORK_JOIN (2 branches), nested FORK_JOIN (3 branches), 4 DYNAMIC_FORK tasks",
+    "loop_handling": "No loops detected - continue-as-new not required",
+    "special_considerations": [
+      "LLM_TEXT_COMPLETE task requires OpenAI SDK integration - implement as activity with retry policy",
+      "JSON_JQ_TRANSFORM tasks should be implemented as Python activities using pyjq library or native list comprehensions",
+      "INLINE JavaScript tasks should be translated to Python code - time functions use datetime module",
+      "Child workflows (security_get_device_id, vision_one_deep_visibility_hunt, vision_one_device_scan, Notify-Channels-x-mocked) must be implemented separately",
+      "DYNAMIC_FORK parallelism may be high - consider adding concurrency limits using semaphores if device/SHA256 lists are large",
+      "Deep nesting (2 levels) requires careful activity naming and result tracking - consider helper methods for nested branches",
+      "Mock data generation can be handled in workflow code or as separate activity depending on complexity preference",
+      "HTML email generation should use Python string formatting or Jinja2 templates",
+      "Workflow depends on OPENAI_API_KEY environment variable"
+    ]
+  },
+  "translation_notes": [
+    "This workflow demonstrates complex enterprise security orchestration with LLM-assisted threat analysis",
+    "The workflow has NO human interaction points - it is fully automated from start to finish",
+    "4 child workflows are referenced but not defined in this JSON - they must be migrated separately: security_get_device_id, vision_one_deep_visibility_hunt, vision_one_device_scan, Notify-Channels-x-mocked",
+    "LLM_TEXT_COMPLETE is a custom Conductor task type - implement as OpenAI API activity with proper prompt engineering",
+    "JSON_JQ_TRANSFORM tasks use JQ query language - can be implemented with pyjq library or translated to Python list comprehensions",
+    "INLINE tasks use GraalJS JavaScript - translate to equivalent Python code",
+    "The nested SWITCH->FORK_JOIN->DYNAMIC_FORK pattern is the most complex structure - use helper methods for clarity",
+    "Mock data contains realistic security alert examples for testing - preserve this data in test fixtures",
+    "All JOIN tasks are implicit in Temporal's asyncio.gather() pattern - no explicit join activities needed",
+    "Consider adding workflow queries to check scan progress and status",
+    "The workflow produces 2 outputs: notified_channel and action_recommendation - ensure these are returned in workflow output dataclass"
+  ]
+}
