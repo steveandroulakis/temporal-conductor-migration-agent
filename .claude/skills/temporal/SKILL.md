@@ -4,153 +4,526 @@ description: "Manage Temporal workflows: server lifecycle, worker processes, wor
 version: 1.0.0
 ---
 
-# **Temporal Skill**
+# Temporal Skill
 
 Manage Temporal workflows using local development server. This skill focuses on the **execution, validation, and troubleshooting** lifecycle of workflows.
 
-Target SDK: Python only  
-Server Type: temporal server start-dev (local development)
+| Property | Value |
+|----------|-------|
+| Target SDK | Python only |
+| Server Type | `temporal server start-dev` (local development) |
+| gRPC Port | 7233 |
 
-## **1. Start Environment & Run Workflows**
+---
 
-Before running any workflow code, you must ensure the server is up and your worker is running the **latest version** of your code.
+## Critical Concepts
 
-### **Step A: Ensure Server**
+Understanding how Temporal components interact is essential for troubleshooting:
 
+### How Workers, Workflows, and Tasks Relate
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     TEMPORAL SERVER                              │
+│  Stores workflow history, manages task queues, coordinates work │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                    Task Queue (named queue)
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         WORKER                                   │
+│  Long-running process that polls task queue for work            │
+│  Contains: Workflow definitions + Activity implementations       │
+│                                                                  │
+│  When work arrives:                                              │
+│    - Workflow Task → Execute workflow code decisions            │
+│    - Activity Task → Execute activity code (business logic)     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key Insight**: The workflow code runs inside the worker. If worker code is outdated or buggy, workflow execution fails.
+
+### Workflow Task vs Activity Task
+
+| Task Type | What It Does | Where It Runs | On Failure |
+|-----------|--------------|---------------|------------|
+| **Workflow Task** | Makes workflow decisions (what to do next) | Worker | **Stalls the workflow** until fixed |
+| **Activity Task** | Executes business logic | Worker | Retries per retry policy |
+
+**CRITICAL**: Workflow Task errors are fundamentally different from Activity Task errors:
+- **Workflow Task Failure** → Workflow **stops making progress entirely**
+- **Activity Task Failure** → Workflow **retries the activity** (workflow still progressing)
+
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CLAUDE_TEMPORAL_LOG_DIR` | `/tmp/claude-temporal-logs` | Directory for worker log files |
+| `CLAUDE_TEMPORAL_PID_DIR` | `/tmp/claude-temporal-pids` | Directory for worker PID files |
+| `CLAUDE_TEMPORAL_PROJECT_DIR` | `$(pwd)` | Project root directory |
+| `CLAUDE_TEMPORAL_PROJECT_NAME` | `$(basename "$PWD")` | Project name (used for log/PID naming) |
+| `CLAUDE_TEMPORAL_NAMESPACE` | `default` | Temporal namespace |
+| `TEMPORAL_ADDRESS` | `localhost:7233` | Temporal server gRPC address |
+| `TEMPORAL_CLI` | `temporal` | Path to Temporal CLI binary |
+| `TEMPORAL_WORKER_CMD` | `uv run worker` | Command to start worker |
+
+---
+
+## Quick Start
+
+```bash
+# 1. Start server
 ./tools/ensure-server.sh
 
-*Checks if temporal is installed and starts the dev server if needed.*
-
-### **Step B: Start/Restart Worker (Crucial)**
-
-**Rule:** Never run old workers. Stale workers with outdated code cause non-determinism errors.
-
+# 2. Start worker (ensures no old workers, starts fresh one)
 ./tools/ensure-worker.sh
 
-*Automatically finds and kills old workers for this project, then starts a new one with fresh code.*
+# 3. Execute workflow
+uv run starter  # Capture workflow_id from output
 
-### **Step C: Execute Workflow**
+# 4. Wait for completion
+./tools/wait-for-workflow-status.sh --workflow-id <id> --status COMPLETED
 
-Run your starter script to initiate the workflow.
+# 5. Get result (IMPORTANT: verify result is correct, not an error message)
+./tools/get-workflow-result.sh --workflow-id <id>
 
-uv run starter  
-# Always capture the Workflow ID printed by your starter script!
+# 6. CLEANUP: Kill workers when done
+./tools/kill-worker.sh
+```
 
-## **2. Validation: Check Status & Results**
+---
 
-Do not assume a workflow succeeded just because it didn't throw an exception immediately. You must validate the execution on the server.
+## Worker Management
 
-### **Check Recent Executions**
+### The Golden Rule
 
-Poll recently executed workflows to see if they completed, failed, or timed out.
+**Ensure no old workers are running.** Stale workers with outdated code cause:
+- Non-determinism errors (history mismatch)
+- Executing old buggy code
+- Confusing behavior
 
-# Check last 5 minutes of activity  
-./tools/list-recent-workflows.sh
+**Best practice**: Run only ONE worker instance with the latest code.
 
-### **Verify Results (The Source of Truth)**
+### Starting Workers
 
-Workflows may "Complete" successfully but return an error message as the result. Always inspect the final output.
+```bash
+# PREFERRED: Smart restart (kills old, starts fresh)
+./tools/ensure-worker.sh
+```
 
-./tools/get-workflow-result.sh --workflow-id <workflow-id>
+This command:
+1. Finds ALL existing workers for the project
+2. Kills them
+3. Starts a new worker with fresh code
+4. Waits for worker to be ready
 
-## **3. Troubleshooting: Stalls & Failures**
+### Verifying Workers
 
-If a workflow is not completing, use this decision matrix to resolve the issue.
+```bash
+# List all running workers
+./tools/list-workers.sh
 
-### **Scenario A: The Workflow is Stalled**
+# Check specific worker health
+./tools/monitor-worker-health.sh
 
-Symptoms: Workflow is RUNNING but making no progress.  
-Cause: Workflow Task Errors (bugs in workflow code) or infinite retries (downstream service failures) will stall execution.  
-**Diagnosis:**
-
-# 1. Find which workflows are stalled  
-./tools/find-stalled-workflows.sh
-
-# 2. Analyze the specific error causing the stall  
-./tools/analyze-workflow-error.sh --workflow-id <workflow-id>
-
-### **Scenario B: Handling the Error**
-
-Once you identify the error via analyze-workflow-error.sh, choose the correct fix path:
-
-#### **Path 1: Non-Determinism Errors**
-
-*Error indicates workflow logic changed (e.g., history mismatch).*
-
-1. **Terminate** the affected workflow (it cannot be saved).  
-   temporal workflow terminate --workflow-id <workflow-id>
-
-2. **Fix** the code logic.  
-3. **Restart** the worker: ./tools/ensure-worker.sh  
-4. **Start** a new workflow execution.
-
-#### **Path 2: Standard Bugs (Code Errors)**
-
-*Error is a standard Python exception/bug.*
-
-1. **Fix** the root cause in your code.  
-2. **Restart** the worker: ./tools/ensure-worker.sh  
-3. **Do NOT terminate** the workflow. The new worker will pick up the history and continue successfully from where it left off.
-
-#### **Path 3: Stuck on Retries**
-
-*Workflow is healthy, but an Activity is failing repeatedly.*
-
-1. Check external systems/API connectivity.  
-2. If code is wrong, fix code -> ./tools/ensure-worker.sh.  
-3. Workflow will retry the activity with the new code automatically.
-
-## **4. Logs & Deep Dives**
-
-If the CLI tools don't reveal the issue, check the raw logs or the Web UI.
-
-### **Worker Logs**
-
-# Tail the logs for the current project worker  
+# View worker logs
 tail -f $CLAUDE_TEMPORAL_LOG_DIR/worker-$(basename "$(pwd)").log
+```
 
-*Tip: Look for "Worker started" to confirm initialization.*
+**What to look for in logs**:
+- `Worker started, listening on task queue: ...` → Worker is ready
+- `Worker process died during startup` → Startup failure, check logs for error
 
-### **Web UI**
+### Cleanup (REQUIRED)
 
-Visual inspection of the Event History is often the fastest way to understand complex branching.
+**Always kill workers when done.** Don't leave workers running.
 
-http://localhost:8233
-
-## **5. Cleanup**
-
-When finished with a task or switching contexts, ensure you don't leave orphan processes.
-
-# Kill workers for the current project  
+```bash
+# Kill current project's worker
 ./tools/kill-worker.sh
 
-# Kill ALL workers (cleanup entire environment)  
+# Kill ALL workers (full cleanup)
 ./tools/kill-all-workers.sh
 
-## **Tool Reference**
+# Kill all workers AND server
+./tools/kill-all-workers.sh --include-server
+```
 
-### **Lifecycle Tools**
+---
 
-* ensure-server.sh: Starts local dev server if not running.  
-* ensure-worker.sh: **Smart Restart.** Kills old project workers, starts new one, waits for readiness.  
-* kill-worker.sh: Kills current project's worker.  
-* kill-all-workers.sh: cleanup tool. Use --include-server to stop everything.
+## Workflow Execution
 
-### **Monitoring Tools**
+### Starting Workflows
 
-* list-recent-workflows.sh: Shows workflows from last N minutes (--minutes 10).  
-* find-stalled-workflows.sh: Detects workflows with high failure attempts.  
-* monitor-worker-health.sh: Verifies worker PID and log activity.  
-* wait-for-workflow-status.sh: Blocks until workflow reaches status (useful for scripts).
+```bash
+# Execute workflow via starter script
+uv run starter
+```
 
-### **Debugging Tools**
+**CRITICAL**: Capture the Workflow ID from output. You need it for all monitoring/troubleshooting.
 
-* analyze-workflow-error.sh: Extracts stack traces and failure reasons from history.  
-* get-workflow-result.sh: Retrieves final output of completed workflows.  
-* bulk-cancel-workflows.sh: Mass cancellation tool (--pattern "test-.*").
+### Checking Status
 
-### **Environment Variables**
+```bash
+# Get workflow status
+temporal workflow describe --workflow-id <id>
 
-* CLAUDE_TEMPORAL_LOG_DIR: /tmp/claude-temporal-logs  
-* CLAUDE_TEMPORAL_PID_DIR: /tmp/claude-temporal-pids  
-* TEMPORAL_UI_ADDRESS: http://localhost:8233
+# Wait for specific status
+./tools/wait-for-workflow-status.sh \
+  --workflow-id <id> \
+  --status COMPLETED \
+  --timeout 60
+```
+
+### Workflow Status Reference
+
+| Status | Meaning | Action |
+|--------|---------|--------|
+| `RUNNING` | Workflow in progress | Wait, or check if stalled |
+| `COMPLETED` | Successfully finished | Get result, verify correctness |
+| `FAILED` | Error during execution | Analyze error |
+| `CANCELED` | Explicitly canceled | Review reason |
+| `TERMINATED` | Force-stopped | Review reason |
+| `TIMED_OUT` | Exceeded timeout | Increase timeout |
+
+### Getting Results
+
+```bash
+./tools/get-workflow-result.sh --workflow-id <id>
+```
+
+**IMPORTANT - False Positive Detection**:
+
+Workflows may `COMPLETE` but return undesired results (e.g., error messages in the result payload).
+
+```json
+// This workflow COMPLETED but the result is an ERROR!
+{"status": "error", "message": "Failed to process request"}
+```
+
+**Always verify the result content is correct**, not just that the status is COMPLETED.
+
+---
+
+## Troubleshooting
+
+### Step 1: Identify the Problem
+
+```bash
+# Check workflow status
+temporal workflow describe --workflow-id <id>
+
+# Check for stalled workflows (workflows stuck in RUNNING)
+./tools/find-stalled-workflows.sh
+
+# Analyze specific workflow errors
+./tools/analyze-workflow-error.sh --workflow-id <id>
+```
+
+### Step 2: Diagnose Using This Decision Tree
+
+```
+Workflow not behaving as expected?
+│
+├── Status: RUNNING but no progress (STALLED)
+│   │
+│   ├── Is it an interactive workflow waiting for signal/update?
+│   │   └── YES → Send the required interaction
+│   │
+│   └── NO → Run: ./tools/find-stalled-workflows.sh
+│       │
+│       ├── WorkflowTaskFailed detected
+│       │   │
+│       │   ├── Non-determinism error (history mismatch)?
+│       │   │   └── See: "Fixing Non-Determinism Errors" below
+│       │   │
+│       │   └── Other workflow task error (code bug, missing registration)?
+│       │       └── See: "Fixing Other Workflow Task Errors" below
+│       │
+│       └── ActivityTaskFailed (excessive retries)
+│           └── Activity is retrying. Fix activity code, restart worker.
+│               Workflow will auto-retry with new code.
+│
+├── Status: COMPLETED but wrong result
+│   └── Check result: ./tools/get-workflow-result.sh --workflow-id <id>
+│       Is result an error message? → Fix workflow/activity logic
+│
+├── Status: FAILED
+│   └── Run: ./tools/analyze-workflow-error.sh --workflow-id <id>
+│       Fix code → ./tools/ensure-worker.sh → Start NEW workflow
+│
+├── Status: TIMED_OUT
+│   └── Increase timeouts → ./tools/ensure-worker.sh → Start NEW workflow
+│
+└── Workflow never starts
+    └── Check: Worker running? Task queue matches? Workflow registered?
+```
+
+---
+
+## Fixing Workflow Task Errors
+
+**Workflow task errors STALL the workflow** - it stops making progress entirely until the issue is fixed.
+
+### Fixing Non-Determinism Errors
+
+Non-determinism occurs when workflow code changes while a workflow is running, causing history mismatch.
+
+**Symptoms**:
+- `WorkflowTaskFailed` events in history
+- "Non-deterministic error" or "history mismatch" in logs
+
+**Fix procedure**:
+```bash
+# 1. TERMINATE affected workflows (they cannot recover)
+temporal workflow terminate --workflow-id <id>
+
+# 2. Kill existing workers
+./tools/kill-worker.sh
+
+# 3. Fix the workflow code if needed
+
+# 4. Restart worker with corrected code
+./tools/ensure-worker.sh
+
+# 5. Verify workflow logic is correct
+
+# 6. Start NEW workflow execution
+uv run starter
+```
+
+**Key point**: Non-determinism corrupts the workflow. You MUST terminate and start fresh.
+
+### Fixing Other Workflow Task Errors
+
+For workflow task errors that are NOT non-determinism (code bugs, missing registration, etc.):
+
+**Symptoms**:
+- `WorkflowTaskFailed` events
+- Error is NOT "history mismatch" or "non-deterministic"
+
+**Fix procedure**:
+```bash
+# 1. Identify the error
+./tools/analyze-workflow-error.sh --workflow-id <id>
+
+# 2. Fix the root cause (code bug, worker config, etc.)
+
+# 3. Kill and restart worker with fixed code
+./tools/ensure-worker.sh
+
+# 4. NO NEED TO TERMINATE - the workflow will automatically resume
+#    The new worker picks up where it left off and continues execution
+```
+
+**Key point**: Unlike non-determinism, the workflow can recover once you fix the code.
+
+---
+
+## Fixing Activity Task Errors
+
+**Activity task errors cause retries**, not immediate workflow failure.
+
+### Workflow Stalling Due to Retries
+
+Workflows can appear stalled because an activity keeps failing and retrying.
+
+**Diagnosis**:
+```bash
+# Check for excessive activity retries
+./tools/find-stalled-workflows.sh
+
+# Look for ActivityTaskFailed count
+# Check worker logs for retry messages
+tail -100 $CLAUDE_TEMPORAL_LOG_DIR/worker-$(basename "$(pwd)").log
+```
+
+**Fix procedure**:
+```bash
+# 1. Fix the activity code
+
+# 2. Restart worker with fixed code
+./tools/ensure-worker.sh
+
+# 3. Worker auto-retries with new code
+#    No need to terminate or restart workflow
+```
+
+### Activity Failure (Retries Exhausted)
+
+When all retries are exhausted, the activity fails permanently.
+
+**Fix procedure**:
+```bash
+# 1. Analyze the error
+./tools/analyze-workflow-error.sh --workflow-id <id>
+
+# 2. Fix activity code
+
+# 3. Restart worker
+./tools/ensure-worker.sh
+
+# 4. Start NEW workflow (old one has failed)
+uv run starter
+```
+
+---
+
+## Common Error Types Reference
+
+| Error Type | Where to Find | What Happened | Recovery |
+|------------|---------------|---------------|----------|
+| **Non-determinism** | `WorkflowTaskFailed` in history | Code changed during execution | Terminate workflow → Fix → Restart worker → NEW workflow |
+| **Workflow code bug** | `WorkflowTaskFailed` in history | Bug in workflow logic | Fix code → Restart worker → Workflow auto-resumes |
+| **Missing workflow** | Worker logs | Workflow not registered | Add to worker.py → Restart worker |
+| **Missing activity** | Worker logs | Activity not registered | Add to worker.py → Restart worker |
+| **Activity bug** | `ActivityTaskFailed` in history | Bug in activity code | Fix code → Restart worker → Auto-retries |
+| **Activity retries** | `ActivityTaskFailed` (count >2) | Repeated failures | Fix code → Restart worker → Auto-retries |
+| **Sandbox violation** | Worker logs | Bad imports in workflow | Fix workflow.py imports → Restart worker |
+| **Task queue mismatch** | Workflow never starts | Different queues in starter/worker | Align task queue names |
+| **Timeout** | Status = TIMED_OUT | Operation too slow | Increase timeout config |
+
+---
+
+## Interactive Workflows
+
+Interactive workflows pause and wait for external input (signals or updates).
+
+### Signals
+
+```bash
+# Send signal to workflow
+temporal workflow signal \
+  --workflow-id <id> \
+  --name "signal_name" \
+  --input '{"key": "value"}'
+
+# Or via interact script (if available)
+uv run interact --workflow-id <id> --signal-name "signal_name" --data '{"key": "value"}'
+```
+
+### Updates
+
+```bash
+# Send update to workflow
+temporal workflow update \
+  --workflow-id <id> \
+  --name "update_name" \
+  --input '{"approved": true}'
+```
+
+### Queries
+
+```bash
+# Query workflow state (read-only)
+temporal workflow query \
+  --workflow-id <id> \
+  --name "get_status"
+```
+
+---
+
+## Common Recipes
+
+### Recipe 1: Clean Start (Fresh Environment)
+```bash
+./tools/kill-all-workers.sh
+./tools/ensure-server.sh
+./tools/ensure-worker.sh
+uv run starter
+```
+
+### Recipe 2: Debug Stalled Workflow
+```bash
+# 1. Find what's wrong
+./tools/find-stalled-workflows.sh
+./tools/analyze-workflow-error.sh --workflow-id <id>
+
+# 2. Check worker logs
+tail -100 $CLAUDE_TEMPORAL_LOG_DIR/worker-$(basename "$(pwd)").log
+
+# 3. Fix based on error type (see decision tree above)
+```
+
+### Recipe 3: Clear Stalled Environment
+```bash
+./tools/find-stalled-workflows.sh
+./tools/bulk-cancel-workflows.sh
+./tools/kill-worker.sh
+./tools/ensure-worker.sh
+```
+
+### Recipe 4: Test Interactive Workflow
+```bash
+./tools/ensure-worker.sh
+uv run starter  # Get workflow_id
+./tools/wait-for-workflow-status.sh --workflow-id $workflow_id --status RUNNING
+uv run interact --workflow-id $workflow_id --signal-name "approval" --data '{"approved": true}'
+./tools/wait-for-workflow-status.sh --workflow-id $workflow_id --status COMPLETED
+./tools/get-workflow-result.sh --workflow-id $workflow_id
+./tools/kill-worker.sh  # CLEANUP
+```
+
+### Recipe 5: Check Recent Workflow Results
+```bash
+# List recent workflows
+./tools/list-recent-workflows.sh --minutes 30
+
+# Check results (verify they're correct, not error messages!)
+./tools/get-workflow-result.sh --workflow-id <id1>
+./tools/get-workflow-result.sh --workflow-id <id2>
+```
+
+---
+
+## Tool Reference
+
+### Lifecycle Tools
+
+| Tool | Description | Key Options |
+|------|-------------|-------------|
+| `ensure-server.sh` | Start dev server if not running | - |
+| `ensure-worker.sh` | Kill old workers, start fresh one | Uses `$TEMPORAL_WORKER_CMD` |
+| `kill-worker.sh` | Kill current project's worker | - |
+| `kill-all-workers.sh` | Kill all workers | `--include-server` |
+| `list-workers.sh` | List running workers | - |
+
+### Monitoring Tools
+
+| Tool | Description | Key Options |
+|------|-------------|-------------|
+| `list-recent-workflows.sh` | Show recent executions | `--minutes N` (default: 5) |
+| `find-stalled-workflows.sh` | Detect stalled workflows | `--query "..."` |
+| `monitor-worker-health.sh` | Check worker status | - |
+| `wait-for-workflow-status.sh` | Block until status | `--workflow-id`, `--status`, `--timeout` |
+
+### Debugging Tools
+
+| Tool | Description | Key Options |
+|------|-------------|-------------|
+| `analyze-workflow-error.sh` | Extract errors from history | `--workflow-id`, `--run-id` |
+| `get-workflow-result.sh` | Get workflow output | `--workflow-id`, `--raw` |
+| `bulk-cancel-workflows.sh` | Mass cancellation | `--pattern "..."` |
+
+---
+
+## Log Files
+
+| Log | Location | Content |
+|-----|----------|---------|
+| Worker logs | `$CLAUDE_TEMPORAL_LOG_DIR/worker-{project}.log` | Worker output, activity logs, errors |
+
+**Useful searches**:
+```bash
+# Find errors
+grep -i "error" $CLAUDE_TEMPORAL_LOG_DIR/worker-*.log
+
+# Check worker startup
+grep -i "started" $CLAUDE_TEMPORAL_LOG_DIR/worker-*.log
+
+# Find activity issues
+grep -i "activity" $CLAUDE_TEMPORAL_LOG_DIR/worker-*.log
+```
