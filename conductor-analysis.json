@@ -1,0 +1,143 @@
+{
+  "analysis_date": "2025-11-23T00:00:00Z",
+  "conductor_file": "conductor-definition/OSS_HTTP_workflow_example.json",
+  "workflow_metadata": {
+    "name": "fetch_users",
+    "version": 11,
+    "description": "Fetch users and filter based on name",
+    "inputs": [],
+    "outputs": [
+      "users"
+    ],
+    "timeout_seconds": 0,
+    "timeout_policy": "ALERT_ONLY",
+    "schema_version": 2,
+    "restartable": true,
+    "owner_email": "example@email.com"
+  },
+  "project_config": {
+    "project_name": "FetchUsers",
+    "project_name_snake": "fetch_users",
+    "task_queue": "fetch-users-task-queue"
+  },
+  "tasks": [
+    {
+      "name": "fetch_users",
+      "type": "HTTP",
+      "reference_name": "fetch_users_ref",
+      "description": "Fetches user data from JSONPlaceholder API via HTTP GET request",
+      "input_parameters": {
+        "http_request": {
+          "uri": "https://jsonplaceholder.typicode.com/users",
+          "method": "GET",
+          "connectionTimeOut": 0,
+          "readTimeOut": 0
+        }
+      },
+      "output_parameters": {},
+      "dependencies": [],
+      "task_specific_config": {
+        "uri": "https://jsonplaceholder.typicode.com/users",
+        "method": "GET",
+        "connectionTimeOut": 0,
+        "readTimeOut": 0,
+        "content_type": "application/json"
+      },
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0,
+        "backoffScaleFactor": 1
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Translate to async HTTP activity using httpx.AsyncClient(). Configure appropriate timeouts for network operations. Activity should return response body for downstream processing. Add retry policy for transient network failures."
+    },
+    {
+      "name": "jq_filter_users",
+      "type": "JSON_JQ_TRANSFORM",
+      "reference_name": "jq_filter_users_ref",
+      "description": "Filters user list to only include users whose name starts with 'C' using JQ transformation",
+      "input_parameters": {
+        "users": "${fetch_users_ref.output.response.body}",
+        "queryExpression": "[.users[] | select(.name | test(\"^C\"))]"
+      },
+      "output_parameters": {},
+      "dependencies": [
+        "fetch_users_ref"
+      ],
+      "task_specific_config": {
+        "queryExpression": "[.users[] | select(.name | test(\"^C\"))]",
+        "input_data_field": "users",
+        "jq_filter_pattern": "name starts with C"
+      },
+      "retry_config": {
+        "retryCount": 0,
+        "retryLogic": "FIXED",
+        "retryDelaySeconds": 0
+      },
+      "control_flow": {
+        "is_conditional": false,
+        "is_loop": false,
+        "is_parallel": false,
+        "nesting_level": 0
+      },
+      "temporal_translation_notes": "Translate to Python activity that performs JSON filtering. The JQ expression '[.users[] | select(.name | test(\"^C\"))]' should be implemented as Python list comprehension filtering users where name starts with 'C'. Can use standard Python JSON processing or pyjq library for complex JQ expressions. This is a pure data transformation suitable for a synchronous activity."
+    }
+  ],
+  "human_interaction_patterns": [],
+  "control_flow_summary": {
+    "max_nesting_depth": 0,
+    "has_loops": false,
+    "has_parallel_execution": false,
+    "has_dynamic_parallelism": false,
+    "has_sub_workflows": false,
+    "complexity_score": "low",
+    "complexity_factors": [
+      "Simple sequential workflow with only 2 tasks",
+      "No conditional branching",
+      "No loops or iterations",
+      "No parallel execution",
+      "Straightforward data pipeline: fetch → transform"
+    ]
+  },
+  "data_flow": {
+    "workflow_inputs_used": [],
+    "task_output_references": [
+      "${fetch_users_ref.output.response.body}"
+    ],
+    "jsonpath_expressions": [
+      "${fetch_users_ref.output.response.body}"
+    ],
+    "workflow_variables": [],
+    "data_transformation_pattern": "HTTP response body → JQ filter → workflow output"
+  },
+  "recommended_patterns": {
+    "human_interaction": "None required - fully automated workflow",
+    "error_handling": "Add RetryPolicy to fetch_users activity (network operations require retry logic for transient failures). Consider exponential backoff with 3-5 maximum attempts.",
+    "parallel_execution": "Not applicable - sequential processing required (filter depends on fetch result)",
+    "loop_handling": "Not applicable - no loops in this workflow",
+    "special_considerations": [
+      "HTTP task requires httpx dependency for async HTTP operations",
+      "JSON_JQ_TRANSFORM task should be implemented as Python data filtering activity",
+      "Consider adding timeout configuration for the HTTP request (currently set to 0/unlimited)",
+      "The JQ expression can be simplified to Python: [user for user in users if user['name'].startswith('C')]",
+      "Output uses nested path ${fetch_users_ref.output.response.body} - ensure HTTP activity returns structured response object",
+      "Workflow has no input parameters - may want to parameterize the filter pattern or API endpoint"
+    ]
+  },
+  "translation_notes": [
+    "This is a simple data pipeline workflow with low migration complexity",
+    "HTTP task will become an async activity using httpx.AsyncClient()",
+    "JSON_JQ_TRANSFORM is not a standard Conductor primitive but can be easily implemented as a Python filtering activity",
+    "The JQ expression '[.users[] | select(.name | test(\"^C\"))]' translates to Python list comprehension with regex or string.startswith()",
+    "No human interaction, no complex control flow - straightforward migration",
+    "Consider adding proper timeout values (currently 0/unlimited in Conductor definition)",
+    "The workflow output directly references the filtered result - ensure activity returns this format",
+    "Workflow version 11 suggests this is a mature, stable workflow definition"
+  ]
+}

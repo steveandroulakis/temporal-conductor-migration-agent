@@ -1,0 +1,65 @@
+{
+  "name": "fetch_users",
+  "description": "Fetch users and filter based on name",
+  "version": 11,
+  "tasks": [
+    {
+      "name": "fetch_users",
+      "taskReferenceName": "fetch_users_ref",
+      "inputParameters": {
+        "http_request": {
+          "uri": "https://jsonplaceholder.typicode.com/users",
+          "method": "GET",
+          "connectionTimeOut": 0,
+          "readTimeOut": 0
+        }
+      },
+      "type": "HTTP",
+      "decisionCases": {},
+      "defaultCase": [],
+      "forkTasks": [],
+      "startDelay": 0,
+      "joinOn": [],
+      "optional": false,
+      "defaultExclusiveJoinTask": [],
+      "asyncComplete": false,
+      "loopOver": [],
+      "onStateChange": {},
+      "permissive": false
+    },
+    {
+      "name": "jq_filter_users",
+      "taskReferenceName": "jq_filter_users_ref",
+      "inputParameters": {
+        "users": "${fetch_users_ref.output.response.body}",
+        "queryExpression": "[.users[] | select(.name | test(\"^C\"))]"
+      },
+      "type": "JSON_JQ_TRANSFORM",
+      "decisionCases": {},
+      "defaultCase": [],
+      "forkTasks": [],
+      "startDelay": 0,
+      "joinOn": [],
+      "optional": false,
+      "defaultExclusiveJoinTask": [],
+      "asyncComplete": false,
+      "loopOver": [],
+      "onStateChange": {},
+      "permissive": false
+    }
+  ],
+  "inputParameters": [],
+  "outputParameters": {
+    "users": "${jq_filter_users_ref.output.result}"
+  },
+  "schemaVersion": 2,
+  "restartable": true,
+  "workflowStatusListenerEnabled": false,
+  "ownerEmail": "example@email.com",
+  "timeoutPolicy": "ALERT_ONLY",
+  "timeoutSeconds": 0,
+  "variables": {},
+  "inputTemplate": {},
+  "enforceSchema": true,
+  "metadata": {}
+}
