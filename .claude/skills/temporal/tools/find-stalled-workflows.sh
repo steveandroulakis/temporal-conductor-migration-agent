@@ -38,11 +38,15 @@ if ! command -v jq >/dev/null 2>&1; then
   echo "This script will continue with basic text parsing..." >&2
 fi
 
-# Build list command
+# Build list command - only look for RUNNING workflows since stalled workflows must be running
 LIST_CMD=("$TEMPORAL_CLI" "workflow" "list" "--address" "$TEMPORAL_ADDRESS" "--namespace" "$CLAUDE_TEMPORAL_NAMESPACE")
 
 if [[ -n "$query" ]]; then
-  LIST_CMD+=("--query" "$query")
+  # Append user query to running filter
+  LIST_CMD+=("--query" "ExecutionStatus='Running' AND ($query)")
+else
+  # Default: only find running workflows
+  LIST_CMD+=("--query" "ExecutionStatus='Running'")
 fi
 
 echo "Scanning for stalled workflows..."
@@ -56,8 +60,9 @@ if ! workflow_list=$("${LIST_CMD[@]}" 2>&1); then
 fi
 
 # Parse workflow IDs from list
-# The output format is typically a table with columns including WorkflowId
-workflow_ids=$(echo "$workflow_list" | awk 'NR>1 && $1 != "" {print $1}' | grep -v "^-" || true)
+# The output format is: Status WorkflowId Type StartTime
+# WorkflowId is in column 2
+workflow_ids=$(echo "$workflow_list" | awk 'NR>1 {print $2}' | grep -v "^-" | grep -v "^$" || true)
 
 if [[ -z "$workflow_ids" ]]; then
   echo "No workflows found"
@@ -74,12 +79,14 @@ found_stalled=false
 while IFS= read -r workflow_id; do
   [[ -z "$workflow_id" ]] && continue
 
-  # Get workflow description
-  if describe_output=$("$TEMPORAL_CLI" workflow describe --workflow-id "$workflow_id" --address "$TEMPORAL_ADDRESS" --namespace "$CLAUDE_TEMPORAL_NAMESPACE" 2>/dev/null); then
+  # Get workflow event history using 'show' to see failure events
+  if show_output=$("$TEMPORAL_CLI" workflow show --workflow-id "$workflow_id" --address "$TEMPORAL_ADDRESS" --namespace "$CLAUDE_TEMPORAL_NAMESPACE" 2>/dev/null); then
 
     # Check for workflow task failures
-    workflow_task_failures=$(echo "$describe_output" | grep -c "WorkflowTaskFailed" || echo "0")
-    activity_task_failures=$(echo "$describe_output" | grep -c "ActivityTaskFailed" || echo "0")
+    workflow_task_failures=$(echo "$show_output" | grep -c "WorkflowTaskFailed" 2>/dev/null || echo "0")
+    workflow_task_failures=$(echo "$workflow_task_failures" | tr -d '\n' | tr -d ' ')
+    activity_task_failures=$(echo "$show_output" | grep -c "ActivityTaskFailed" 2>/dev/null || echo "0")
+    activity_task_failures=$(echo "$activity_task_failures" | tr -d '\n' | tr -d ' ')
 
     # Report if significant failures found
     if [[ "$workflow_task_failures" -gt 0 ]]; then
