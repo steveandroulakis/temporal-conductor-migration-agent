@@ -49,7 +49,7 @@ Invoke: Skill(temporal)
 
 | Type | Artifacts |
 |------|-----------|
-| **Inputs** | `conductor-analysis.json`, `{project}_temporal/` (workflow/worker/starter code) |
+| **Inputs** | `a2a-analysis.json`, `{project}/` (workflow/worker/starter code) |
 | **Output** | `WORKFLOW_EXECUTION_REPORT.md` |
 
 ---
@@ -118,7 +118,7 @@ uv run starter
 
 #### Determine Workflow Type
 
-Read `conductor-analysis.json` to identify workflow type:
+Read `a2a-analysis.json` to identify workflow type:
 
 | Workflow Type | Characteristics | Validation Strategy |
 |---------------|-----------------|---------------------|
@@ -164,13 +164,13 @@ For **Updates** (if `interact.py` supports updates):
 uv run interact --workflow-id <id> --update-name "<update_name>" --data '{"approved": true}'
 ```
 
-**Common interaction patterns from Conductor**:
+**Common interaction patterns**:
 
-| Conductor Pattern | Temporal Pattern | Interact Command |
-|-------------------|------------------|------------------|
-| `HUMAN_TASK` (approval) | Signal or Update | `--signal-name "approval_signal" --data '{"approved": true}'` |
-| `WAIT` (external event) | Signal | `--signal-name "resume_signal" --data '{"event": "received"}'` |
-| `WAIT` (timeout-based) | Timer | No interaction needed - auto-continues |
+| Pattern | Temporal Pattern | Interact Command |
+|---------|------------------|------------------|
+| Approval request | Signal or Update | `--signal-name "approval_signal" --data '{"approved": true}'` |
+| External event wait | Signal | `--signal-name "resume_signal" --data '{"event": "received"}'` |
+| Timeout-based wait | Timer | No interaction needed - auto-continues |
 
 **Step 3**: Wait for completion
 ```bash
@@ -186,7 +186,7 @@ uv run interact --workflow-id <id> --update-name "<update_name>" --data '{"appro
 
 **CRITICAL**: You must test 2-3 executions to cover major branches.
 
-**Step 1**: Identify branches from `conductor-analysis.json`
+**Step 1**: Identify branches from `a2a-analysis.json`
 - Look for `SWITCH` tasks → identify case values
 - Look for `DO_WHILE` → test loop continuation and termination
 - Look for conditional expressions → identify true/false paths

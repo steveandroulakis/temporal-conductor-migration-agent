@@ -1,16 +1,17 @@
-# Sub-Agent Architecture for Conductor-to-Temporal Migration
+# Sub-Agent Architecture for A2A + Temporal Project Generation
 
 ## Overview
 
-This document specifies an **8-agent sequential pipeline** for converting Netflix Conductor workflows to Temporal Python SDK applications. Each agent operates with high autonomy, performing a distinct phase of the migration process.
+This document specifies a **11-agent sequential pipeline** for generating Temporal-powered A2A (Agent-to-Agent) projects from natural language specifications. Each agent operates with high autonomy, performing a distinct phase of the generation process.
 
 ## Architecture Principles
 
 - **Sequential Pipeline**: Agents execute in strict order, each building on previous agents' outputs
 - **High Autonomy**: Each agent makes decisions independently without asking the main agent for guidance
-- **Structured Communication**: Agents communicate via `conductor-analysis.json` (structured analysis document)
-- **Documentation-Driven**: Each agent has access to the comprehensive `conductor-migration/` documentation
-- **Test-First**: Dedicated validation agent ensures code quality before finalization
+- **Structured Communication**: Agents communicate via `a2a-analysis.json` (structured analysis document)
+- **Documentation-Driven**: Each agent has access to the comprehensive `a2a-migration/` documentation
+- **SDK-Integrated**: Generated code uses `a2a-sdk` for protocol compliance
+- **Multi-Agent Output**: Generates complete multi-agent systems with gateways and workers
 
 ## Pipeline Flow
 
@@ -22,58 +23,79 @@ This document specifies an **8-agent sequential pipeline** for converting Netfli
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ 1. Conductor Analyzer                                                   │
-│    Input:  conductor-definition/*.json                                  │
-│    Output: conductor-analysis.json                                      │
+│ 1. Spec Analyzer                                                        │
+│    Input:  Natural language spec with code examples                     │
+│    Output: a2a-analysis.json                                            │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ 2. Project Scaffolder                                                   │
-│    Input:  conductor-analysis.json                                      │
-│    Output: Package structure, shared.py, pyproject.toml                 │
+│    Input:  a2a-analysis.json                                            │
+│    Output: Multi-agent package structure, shared/types.py, pyproject    │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ 3. Activity Generator                                                   │
-│    Input:  conductor-analysis.json, shared.py                           │
-│    Output: activities.py                                                │
+│ 3. Agent Card Generator                                                 │
+│    Input:  a2a-analysis.json                                            │
+│    Output: {agent}_agent/agent_card.py for each agent                   │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ 4. Workflow Generator (MOST COMPLEX)                                    │
-│    Input:  conductor-analysis.json, activities.py, shared.py            │
-│    Output: workflow.py                                                  │
+│ 4. Activity Generator                                                   │
+│    Input:  a2a-analysis.json, shared/types.py                           │
+│    Output: {agent}_agent/activities.py for each agent                   │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ 5. Infrastructure Generator                                             │
-│    Input:  conductor-analysis.json, workflow.py, activities.py          │
-│    Output: worker.py, starter.py, interact.py                           │
+│ 5. Workflow Generator (MOST COMPLEX)                                    │
+│    Input:  a2a-analysis.json, activities.py files, shared/types.py      │
+│    Output: {agent}_agent/workflow.py for each agent                     │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ 6. Code Validator                                                       │
+│ 6. Gateway Generator                                                    │
+│    Input:  a2a-analysis.json, workflow.py files, agent_card.py files    │
+│    Output: {agent}_agent/gateway.py for each agent                      │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 7. Infrastructure Generator                                             │
+│    Input:  a2a-analysis.json, all agent files                           │
+│    Output: {agent}_agent/worker.py, run_all.py, starter.py              │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 8. Code Validator                                                       │
 │    Input:  All generated Python files                                   │
-│    Output: Validation report, fixes applied                             │
+│    Output: VALIDATION_REPORT.md, fixes applied                          │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ 6.5 Workflow Executor (NEW)                                             │
-│    Input:  All generated files, conductor-analysis.json                 │
-│    Output: WORKFLOW_EXECUTION_REPORT.md, execution validation           │
+│ 9. System Executor                                                      │
+│    Input:  All generated files, a2a-analysis.json                       │
+│    Output: SYSTEM_EXECUTION_REPORT.md, E2E validation                   │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ 7. Documentation Generator                                              │
-│    Input:  All files, conductor-analysis.json, execution report         │
-│    Output: README.md, comparison docs, setup.sh                         │
+│ 10. Streamlit Generator                                                 │
+│    Input:  a2a-analysis.json, shared/types.py, execution report         │
+│    Output: streamlit_app.py (human-in-the-loop UI)                      │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 11. Documentation Generator                                             │
+│    Input:  All files, a2a-analysis.json, execution report               │
+│    Output: README.md, SYSTEM_ARCHITECTURE.md, setup.sh                  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -81,396 +103,547 @@ This document specifies an **8-agent sequential pipeline** for converting Netfli
 
 ## Agent Specifications
 
-### 1. Conductor Analyzer
+### 1. Spec Analyzer
 
-**Filename**: `subagents/conductor-analyzer.md`
+**Filename**: `claude/agents/spec-analyzer.md`
 
 **Agent Configuration**:
 ```yaml
-name: conductor-analyzer
-description: Analyzes Conductor workflow JSON and creates structured analysis document. MUST be invoked first when starting Conductor-to-Temporal migration.
+name: spec-analyzer
+description: Analyzes natural language specification with embedded code to extract multi-agent architecture. MUST be invoked first when starting A2A project generation.
 tools: Read, Write, Bash, Glob, Grep
 model: inherit
 ```
 
 **Responsibilities**:
-- Parse and validate Conductor workflow JSON from `conductor-definition/` directory
-- Extract workflow metadata (name, version, description, inputs, outputs)
-- Analyze all tasks and identify their types (SIMPLE, HTTP, FORK_JOIN, SWITCH, DO_WHILE, DYNAMIC_FORK, SUB_WORKFLOW, WAIT, HUMAN_TASK)
-- Map control flow patterns (sequential, parallel, conditional, loops)
-- Identify human interaction patterns (HUMAN_TASK, WAIT, expressions like `${user_action.output.*}`)
-- Analyze data flow and dependencies between tasks
-- Detect nested control flow structures (e.g., SWITCH within DO_WHILE within FORK_JOIN)
-- Generate structured `conductor-analysis.json` with complete analysis
+- Read and parse natural language specification file
+- Extract system overview (name, description, purpose)
+- Identify all agents and their roles
+- Parse agent skills from prose and code examples
+- Extract workflow logic and activity requirements
+- Map inter-agent communication patterns
+- Identify shared data types from code examples
+- Assign unique ports and task queues to each agent
+- Generate structured `a2a-analysis.json`
 
 **Input**:
-- Conductor workflow JSON file(s) in `conductor-definition/` directory
+- Natural language specification file (markdown or text)
+- May contain embedded Python code examples
+- May contain ASCII architecture diagrams
 
 **Output**:
-- `conductor-analysis.json` with schema:
+- `a2a-analysis.json` with schema:
   ```json
   {
-    "workflow_metadata": {
-      "name": "string",
-      "version": "number",
-      "description": "string",
-      "inputs": ["field1", "field2"],
-      "outputs": ["field1", "field2"]
+    "analysis_date": "ISO 8601 timestamp",
+    "spec_source": "path to input specification",
+    "system_metadata": {
+      "name": "system name",
+      "description": "system purpose",
+      "total_agents": 2
     },
-    "tasks": [
+    "project_config": {
+      "project_name": "ProjectName",
+      "project_name_snake": "project_name",
+      "base_port": 8000
+    },
+    "agents": [
       {
-        "name": "string",
-        "type": "SIMPLE|HTTP|FORK_JOIN|SWITCH|DO_WHILE|...",
-        "reference_name": "string",
-        "description": "string",
-        "inputs": {},
-        "dependencies": ["ref1", "ref2"],
-        "control_flow": {
-          "is_conditional": "boolean",
-          "is_loop": "boolean",
-          "is_parallel": "boolean",
-          "nesting_level": "number"
-        }
+        "agent_id": "agent_identifier",
+        "name": "AgentDisplayName",
+        "description": "What this agent does",
+        "url": "http://localhost:8000",
+        "port": 8000,
+        "task_queue": "agent-task-queue",
+        "package_name": "agent_name_agent",
+        "skills": [
+          {
+            "id": "skill_id",
+            "name": "Skill Name",
+            "description": "What the skill does",
+            "input_schema": {}
+          }
+        ],
+        "capabilities": {
+          "streaming": true,
+          "push_notifications": true
+        },
+        "workflows": [
+          {
+            "name": "WorkflowClassName",
+            "triggered_by_skill": "skill_id",
+            "description": "What the workflow does"
+          }
+        ],
+        "activities": [
+          {
+            "name": "activity_function_name",
+            "description": "What the activity does",
+            "is_a2a_communication": false
+          }
+        ],
+        "calls_agents": ["other_agent_id"]
       }
     ],
-    "human_interaction_patterns": [
+    "shared_types": [
       {
-        "task_reference": "string",
-        "pattern_type": "approval|wait|notification",
-        "signal_or_update": "signal|update",
-        "data_flow": ["${user_action.output.field}"]
+        "name": "TypeName",
+        "fields": [
+          {"name": "field_name", "type": "str", "description": "field purpose"}
+        ]
       }
     ],
-    "control_flow_summary": {
-      "max_nesting_depth": "number",
-      "has_loops": "boolean",
-      "has_parallel_execution": "boolean",
-      "has_dynamic_parallelism": "boolean",
-      "complexity_score": "low|medium|high"
-    },
-    "recommended_patterns": {
-      "human_interaction": "Updates recommended for X tasks, Signals for Y tasks",
-      "error_handling": "Retry policies needed for X activities",
-      "special_considerations": ["consideration1", "consideration2"]
-    }
+    "translation_notes": [
+      "Note about assumptions made during parsing"
+    ]
   }
   ```
 
 **Documentation References**:
-- `conductor-migration/conductor-migration-guide.md` (Phase 1.1)
-- `conductor-migration/conductor-primitives-reference.md` (all task types)
-- `conductor-migration/conductor-human-interaction.md` (human patterns)
-- `conductor-migration/conductor-architecture.md` (architectural differences)
+- `a2a-migration/README.md` (overview)
+- `a2a-migration/a2a-architecture.md` (conceptual understanding)
+- `a2a-migration/a2a-patterns-reference.md` (implementation patterns)
 
 **Success Criteria**:
 - Valid JSON generated
-- All tasks identified and categorized
-- Human interaction patterns correctly classified
-- Control flow complexity accurately assessed
+- All agents identified from specification
+- Skills correctly extracted for each agent
+- Unique ports assigned (starting from base_port)
+- Unique task queues assigned
+- Inter-agent communication mapped
 
 ---
 
 ### 2. Project Scaffolder
 
-**Filename**: `subagents/project-scaffolder.md`
+**Filename**: `claude/agents/project-scaffolder.md`
 
 **Agent Configuration**:
 ```yaml
 name: project-scaffolder
-description: Creates Python project structure, shared types, and configuration files. Invoked after conductor-analyzer completes.
+description: Creates multi-agent Python project structure with shared types. Invoked after spec-analyzer completes.
 tools: Read, Write, Bash
 model: inherit
 ```
 
 **Responsibilities**:
-- Read `conductor-analysis.json` to understand workflow requirements
-- Create Python package directory structure (`{workflow_name}_temporal/`)
-- Generate `shared.py` with dataclasses for:
-  - Workflow input/output types (from workflow metadata)
-  - Activity-specific input/output types (from tasks analysis)
-  - Human interaction data types (from human_interaction_patterns)
+- Read `a2a-analysis.json` to understand project requirements
+- Create multi-agent directory structure
+- Generate `shared/types.py` with dataclasses for:
+  - Shared types used across agents
+  - Agent-specific input/output types
 - Generate `pyproject.toml` with:
   - Package metadata
-  - Dependencies (temporalio, httpx if HTTP tasks detected)
-  - Console script definitions for worker and starter
+  - Dependencies (temporalio, a2a-sdk[http-server], httpx, mypy)
   - `[tool.uv]` configuration with `package = true`
+  - Console script definitions for each agent's worker
   - Python 3.11+ requirement
 - Create `.gitignore` with Python-specific ignores
-- Create `__init__.py` in package directory
-- Create empty placeholder files for next agents: `activities.py`, `workflow.py`, `worker.py`, `starter.py`
+- Create `__init__.py` in all package directories
+- Create placeholder files for each agent package
 
 **Input**:
-- `conductor-analysis.json`
+- `a2a-analysis.json`
 
 **Output**:
 - Directory structure:
   ```
-  {workflow_name}_temporal/
-  ├── __init__.py
-  ├── shared.py
-  ├── activities.py (empty placeholder)
-  ├── workflow.py (empty placeholder)
-  ├── worker.py (empty placeholder)
-  └── starter.py (empty placeholder)
+  {project_name}/
+  ├── pyproject.toml
+  ├── .gitignore
+  ├── shared/
+  │   ├── __init__.py
+  │   └── types.py
+  ├── {agent1}_agent/
+  │   ├── __init__.py
+  │   ├── agent_card.py (placeholder)
+  │   ├── activities.py (placeholder)
+  │   ├── workflow.py (placeholder)
+  │   ├── gateway.py (placeholder)
+  │   └── worker.py (placeholder)
+  ├── {agent2}_agent/
+  │   └── ...
+  ├── run_all.py (placeholder)
+  └── starter.py (placeholder)
   ```
-- `pyproject.toml`
-- `.gitignore`
 
 **Documentation References**:
-- `conductor-migration/conductor-migration-guide.md` (Phase 1.2)
-- `AGENTS.md` (Project Structure section)
-- `conductor-migration/conductor-troubleshooting.md` (pyproject.toml pitfalls)
+- `a2a-migration/a2a-architecture.md` (project structure)
+- `a2a-migration/a2a-sdk-integration.md` (dependencies)
+- `AGENTS.md` (Python standards)
 
 **Success Criteria**:
 - Package structure follows Python best practices
-- All dataclasses in `shared.py` have complete type hints
+- All dataclasses in `shared/types.py` have complete type hints
 - `pyproject.toml` includes `[tool.uv] package = true`
-- Console script definitions use synchronous entry points (not async)
+- Dependencies include `a2a-sdk[http-server]`
+- Each agent has its own package directory
 
 ---
 
-### 3. Activity Generator
+### 3. Agent Card Generator
 
-**Filename**: `subagents/activity-generator.md`
+**Filename**: `claude/agents/agent-card-generator.md`
+
+**Agent Configuration**:
+```yaml
+name: agent-card-generator
+description: Generates A2A Agent Card configurations for each agent using a2a-sdk types. Invoked after project-scaffolder completes.
+tools: Read, Write, Edit
+model: inherit
+```
+
+**Responsibilities**:
+- Read `a2a-analysis.json` for agent details
+- Generate `{agent}_agent/agent_card.py` for each agent with:
+  - `AgentCard` using a2a-sdk types
+  - `AgentSkill` for each skill with proper JSON schemas
+  - `AgentCapabilities` configuration
+  - `AgentInterface` for JSONRPC transport
+- Ensure URLs match assigned ports
+- Generate proper `inputSchema` JSON Schemas for each skill
+
+**Input**:
+- `a2a-analysis.json`
+- `{agent}_agent/agent_card.py` (placeholder)
+
+**Output**:
+- Complete `{agent}_agent/agent_card.py` for each agent
+
+**Example Output**:
+```python
+from a2a.types import (
+    AgentCard,
+    AgentSkill,
+    AgentCapabilities,
+    AgentInterface,
+)
+
+AGENT_CARD = AgentCard(
+    name="RestaurantFinderAgent",
+    description="Finds restaurants based on cuisine preferences",
+    url="http://localhost:8000",
+    interfaces=[
+        AgentInterface(url="http://localhost:8000", transport="JSONRPC")
+    ],
+    capabilities=AgentCapabilities(
+        streaming=True,
+        pushNotifications=True,
+    ),
+    skills=[
+        AgentSkill(
+            id="find_restaurant",
+            name="Find Restaurant",
+            description="Search for restaurants by cuisine type and location",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "cuisine": {"type": "string"},
+                    "location": {"type": "string"}
+                },
+                "required": ["cuisine", "location"]
+            }
+        )
+    ]
+)
+```
+
+**Documentation References**:
+- `a2a-migration/a2a-sdk-integration.md` (AgentCard types)
+- `a2a-migration/a2a-patterns-reference.md` (agent card pattern)
+
+**Success Criteria**:
+- All agent cards use a2a-sdk types correctly
+- URLs match configured ports
+- Skills have valid JSON Schema inputSchema
+- All required fields populated
+
+---
+
+### 4. Activity Generator
+
+**Filename**: `claude/agents/activity-generator.md`
 
 **Agent Configuration**:
 ```yaml
 name: activity-generator
-description: Generates activities.py with activity functions translated from Conductor tasks. Invoked after project-scaffolder completes.
+description: Generates activities.py with activity functions for each agent. Includes A2A communication activities. Invoked after agent-card-generator completes.
 tools: Read, Write, Edit, Bash
 model: inherit
 ```
 
 **Responsibilities**:
-- Read `conductor-analysis.json` and `shared.py`
-- Translate SIMPLE tasks to `@activity.defn` functions
-- Translate HTTP tasks to `@activity.defn` functions with `httpx` async client
-- Generate activity-specific input/output dataclasses in `shared.py` (if not already present)
-- Add comprehensive docstrings to each activity:
-  - Purpose and business logic
-  - Input parameters with types
-  - Return value with type
-  - Timeout and retry recommendations
-- Use complete type hints (no `Any` type)
-- Follow modern Pythonic patterns
-- Add imports: `from temporalio import activity`, `import httpx` (if needed)
-- Handle activity context logging: `activity.logger.info()`
+- Read `a2a-analysis.json` and `shared/types.py`
+- Generate `{agent}_agent/activities.py` for each agent with:
+  - Business logic activities from spec
+  - A2A communication activities (for agents that call others):
+    - `send_a2a_task` - Send task to another agent
+    - `poll_a2a_task_status` - Poll for task completion
+  - Comprehensive docstrings
+  - Complete type hints
+  - Activity logging
+- Import shared types from `shared.types`
+- Use `httpx.AsyncClient()` for HTTP activities
+- Use `a2a.client.A2AClient` for A2A activities
 
 **Input**:
-- `conductor-analysis.json`
-- `{workflow_name}_temporal/shared.py`
-- Empty `{workflow_name}_temporal/activities.py`
+- `a2a-analysis.json`
+- `shared/types.py`
+- `{agent}_agent/activities.py` (placeholder)
 
 **Output**:
-- Complete `{workflow_name}_temporal/activities.py`
-- Updated `{workflow_name}_temporal/shared.py` (with any additional dataclasses)
+- Complete `{agent}_agent/activities.py` for each agent
 
 **Documentation References**:
-- `conductor-migration/conductor-migration-guide.md` (Phase 2.1)
-- `conductor-migration/conductor-primitives-reference.md` (SIMPLE and HTTP task examples)
+- `a2a-migration/a2a-patterns-reference.md` (A2A activities pattern)
+- `a2a-migration/a2a-sdk-integration.md` (A2AClient usage)
 - `AGENTS.md` (Activity Implementation Reference)
 
 **Success Criteria**:
 - All activities have `@activity.defn` decorator
 - Complete type hints on all functions
-- Comprehensive docstrings with timeout/retry guidance
-- HTTP tasks use `httpx.AsyncClient()` properly
+- A2A communication activities included for cross-agent callers
+- Comprehensive docstrings
 - No sandbox violations (activities can use httpx, I/O, etc.)
 
 ---
 
-### 4. Workflow Generator
+### 5. Workflow Generator
 
-**Filename**: `subagents/workflow-generator.md`
+**Filename**: `claude/agents/workflow-generator.md`
 
 **Agent Configuration**:
 ```yaml
 name: workflow-generator
-description: Generates workflow.py with complete control flow translation. MOST COMPLEX agent. Invoked after activity-generator completes.
+description: Generates workflow.py with Temporal workflow classes for each agent. Implements A2A handoff patterns. MOST COMPLEX agent. Invoked after activity-generator completes.
 tools: Read, Write, Edit, Bash, Grep
 model: sonnet
 ```
 
 **Responsibilities** (MOST COMPLEX AGENT):
-- Read `conductor-analysis.json`, `activities.py`, and `shared.py`
-- Create `@workflow.defn` class
-- Translate control flow patterns:
-  - Sequential tasks → `await` chain
-  - FORK_JOIN + JOIN → `asyncio.gather()`
-  - SWITCH → `if/elif/else` statements
-  - DO_WHILE → `while` loop (with `continue-as-new` for long-running loops)
-  - DYNAMIC_FORK → list comprehension + `asyncio.gather()`
-  - SUB_WORKFLOW → `workflow.execute_child_workflow()`
-- Implement human interaction patterns:
-  - WAIT tasks → Signal + `workflow.wait_condition()`
-  - HUMAN_TASK → Update/Signal + `workflow.wait_condition()`
-  - Implement update handlers: `@workflow.update` with validation
-  - Implement signal handlers: `@workflow.signal`
-  - Handle data flow: `${user_action.output.approved}` → `self._user_action.approved`
-- Configure activity execution:
-  - `workflow.execute_activity()` with proper argument passing
-  - Set timeouts: `start_to_close_timeout`, `schedule_to_close_timeout`
-  - Configure retry policies: `RetryPolicy(initial_interval, maximum_attempts, ...)`
-- Translate data passing:
-  - `${workflow.input.field}` → `input.field`
-  - `${task_ref.output.field}` → `result_variable.field`
-- Handle nested control flow (preserve execution order, add detailed comments)
-- Add workflow queries for status checking: `@workflow.query`
-- **CRITICAL**: Ensure workflow sandbox compliance:
-  - Import activities by name: `from {package}.activities import activity1, activity2`
-  - NEVER import entire activities module
-  - No non-deterministic code in workflow
-- Add comprehensive docstrings and inline comments for complex logic
+- Read `a2a-analysis.json`, `activities.py` files, and `shared/types.py`
+- Create `@workflow.defn` class for each agent's workflow
+- Implement skill-triggered workflow logic
+- **Implement A2A Handoff Pattern** for cross-agent calls:
+  - Send A2A task via activity
+  - Durable polling loop (survives crashes)
+  - Handle task states (submitted → working → completed)
+- Configure activity execution with timeouts and retry policies
+- Use `workflow.unsafe.imports_passed_through()` for activity imports
+- Add workflow queries for status checking
+- **CRITICAL**: Ensure workflow sandbox compliance
+
+**A2A Handoff Pattern**:
+```python
+async def _handoff_to_agent(self, agent_url: str, skill_id: str, params: dict) -> dict:
+    """Durably hand off to external A2A agent."""
+    # Send task via activity (survives crashes)
+    response = await workflow.execute_activity(
+        send_a2a_task,
+        args=[agent_url, skill_id, params],
+        start_to_close_timeout=timedelta(seconds=60),
+    )
+    task_id = response.get("id")
+    task_state = response.get("status", {}).get("state")
+
+    # Durable polling loop
+    while task_state in ["submitted", "working"]:
+        await workflow.sleep(timedelta(seconds=5))
+        status = await workflow.execute_activity(
+            poll_a2a_task_status,
+            args=[agent_url, task_id],
+            start_to_close_timeout=timedelta(seconds=30),
+        )
+        task_state = status.get("status", {}).get("state")
+
+    return response.get("artifacts", [])
+```
 
 **Input**:
-- `conductor-analysis.json`
-- `{workflow_name}_temporal/activities.py`
-- `{workflow_name}_temporal/shared.py`
-- Empty `{workflow_name}_temporal/workflow.py`
+- `a2a-analysis.json`
+- `{agent}_agent/activities.py` (completed)
+- `shared/types.py`
+- `{agent}_agent/workflow.py` (placeholder)
 
 **Output**:
-- Complete `{workflow_name}_temporal/workflow.py`
+- Complete `{agent}_agent/workflow.py` for each agent
 
 **Documentation References** (READS ALL DOCS):
-- `conductor-migration/conductor-migration-guide.md` (Phase 2.2)
-- `conductor-migration/conductor-primitives-reference.md` (ALL task types with examples)
-- `conductor-migration/conductor-human-interaction.md` (Signals vs Updates, wait patterns)
-- `conductor-migration/conductor-architecture.md` (control flow patterns)
-- `conductor-migration/conductor-troubleshooting.md` (sandbox violations, RetryPolicy imports)
+- `a2a-migration/a2a-architecture.md` (conceptual understanding)
+- `a2a-migration/a2a-patterns-reference.md` (A2A handoff pattern)
+- `a2a-migration/a2a-troubleshooting.md` (sandbox violations, common issues)
 - `AGENTS.md` (Workflow Implementation Reference, Critical Pitfalls)
 
 **Success Criteria**:
-- All control flow correctly translated
-- Human interaction uses appropriate pattern (Signal vs Update)
-- Activity execution configured with timeouts and retries
-- Workflow sandbox compliant (specific imports, no non-deterministic code)
-- `RetryPolicy` imported from `temporalio.common` (NOT `temporalio.workflow`)
-- Activity function argument counts match execute_activity calls
-- Type hints complete (no `Any`)
-- Comprehensive docstrings and comments for complex logic
+- All workflows have `@workflow.defn` decorator
+- A2A handoff pattern implemented for cross-agent calls
+- Durable polling loops (in workflow, not inline)
+- Activity execution configured with timeouts
+- Workflow sandbox compliant (passthrough imports)
+- `RetryPolicy` imported from `temporalio.common`
+- Type hints complete
 
 ---
 
-### 5. Infrastructure Generator
+### 6. Gateway Generator
 
-**Filename**: `subagents/infrastructure-generator.md`
+**Filename**: `claude/agents/gateway-generator.md`
+
+**Agent Configuration**:
+```yaml
+name: gateway-generator
+description: Generates gateway.py with FastAPI A2A gateway for each agent using A2AFastAPIApplication. Invoked after workflow-generator completes.
+tools: Read, Write, Edit, Bash
+model: inherit
+```
+
+**Responsibilities**:
+- Read `a2a-analysis.json`, `workflow.py` files, and `agent_card.py` files
+- Generate `{agent}_agent/gateway.py` for each agent with:
+  - `A2AFastAPIApplication` from a2a-sdk
+  - `TemporalAgentExecutor` to route A2A tasks to workflows
+  - `DefaultRequestHandler` with task store
+  - Skill-to-workflow mapping
+  - Lifespan context manager for Temporal client
+  - Proper async initialization
+  - Uvicorn runner for standalone execution
+
+**Input**:
+- `a2a-analysis.json`
+- `{agent}_agent/workflow.py` (completed)
+- `{agent}_agent/agent_card.py` (completed)
+- `{agent}_agent/gateway.py` (placeholder)
+
+**Output**:
+- Complete `{agent}_agent/gateway.py` for each agent
+
+**Documentation References**:
+- `a2a-migration/a2a-sdk-integration.md` (A2AFastAPIApplication pattern)
+- `a2a-migration/a2a-patterns-reference.md` (gateway pattern)
+
+**Success Criteria**:
+- Uses `A2AFastAPIApplication` correctly
+- Implements `AgentExecutor` for Temporal routing
+- Lifespan manages Temporal client lifecycle
+- Port matches agent_card URL
+- Task store configured
+
+---
+
+### 7. Infrastructure Generator
+
+**Filename**: `claude/agents/infrastructure-generator.md`
 
 **Agent Configuration**:
 ```yaml
 name: infrastructure-generator
-description: Generates worker.py and starter.py for workflow execution. Invoked after workflow-generator completes.
+description: Generates worker.py for each agent plus run_all.py and starter.py orchestration scripts. Invoked after gateway-generator completes.
 tools: Read, Write, Bash
 model: inherit
 ```
 
 **Responsibilities**:
-- Read `conductor-analysis.json`, `workflow.py`, and `activities.py`
-- Generate `worker.py`:
-  - Import workflow class and activity functions (by name, not module)
+- Read `a2a-analysis.json`, `workflow.py` files, and `activities.py` files
+- Generate `{agent}_agent/worker.py` for each agent:
+  - Import workflow class and activity functions
   - Create async main function
-  - Connect to Temporal server (localhost:7233 default)
-  - Create Worker with task queue
+  - Connect to Temporal server
+  - Create Worker with agent's task queue
   - Register workflow and activities
-  - Add logging configuration
-  - Add PID file management
-  - Run worker until interrupted
-- Generate `starter.py`:
-  - Import workflow class and input dataclass
-  - Create synchronous main function (NOT async - console script requirement)
-  - Connect to Temporal client
-  - Generate example input data (from workflow metadata)
-  - Start workflow execution with `client.execute_workflow()`
-  - Display results and workflow URL
-  - Add error handling
+  - **CRITICAL**: Synchronous `main()` for console script
+- Generate `run_all.py` orchestration script:
+  - Start all workers
+  - Start all gateways
+  - Handle graceful shutdown
+- Generate `starter.py` demo script:
+  - Demonstrate end-to-end A2A flow
+  - Fetch agent cards
+  - Send test tasks
+  - Poll for results
 
 **Input**:
-- `conductor-analysis.json`
-- `{workflow_name}_temporal/workflow.py`
-- `{workflow_name}_temporal/activities.py`
-- `{workflow_name}_temporal/shared.py`
-- Empty `{workflow_name}_temporal/worker.py`
-- Empty `{workflow_name}_temporal/starter.py`
+- `a2a-analysis.json`
+- `{agent}_agent/workflow.py` (completed)
+- `{agent}_agent/activities.py` (completed)
+- `{agent}_agent/worker.py` (placeholder)
+- `run_all.py` (placeholder)
+- `starter.py` (placeholder)
 
 **Output**:
-- Complete `{workflow_name}_temporal/worker.py`
-- Complete `{workflow_name}_temporal/starter.py`
+- Complete `{agent}_agent/worker.py` for each agent
+- Complete `run_all.py`
+- Complete `starter.py`
 
 **Documentation References**:
-- `conductor-migration/conductor-migration-guide.md` (Phase 2.3, 2.4)
-- `AGENTS.md` (Worker and Starter Implementation References)
-- `conductor-migration/conductor-troubleshooting.md` (async main pitfalls)
+- `a2a-migration/a2a-patterns-reference.md` (worker, orchestration patterns)
+- `a2a-migration/a2a-troubleshooting.md` (async main pitfalls)
+- `AGENTS.md` (Worker Implementation Reference)
 
 **Success Criteria**:
-- Worker registers workflow and activities correctly
-- Worker imports by name (not module) to avoid sandbox issues
-- Starter has synchronous main function (console script compatible)
-- Starter generates valid example input data
-- Both files have proper error handling and logging
+- Workers register workflow and activities correctly
+- Workers have synchronous `main()` for console scripts
+- `run_all.py` starts all components
+- `starter.py` demonstrates full A2A flow
+- Graceful shutdown handling
 
 ---
 
-### 6. Code Validator
+### 8. Code Validator
 
-**Filename**: `subagents/code-validator.md`
+**Filename**: `claude/agents/code-validator.md`
 
 **Agent Configuration**:
 ```yaml
 name: code-validator
-description: Validates all generated code for syntax, types, and Temporal compliance. Invoked after infrastructure-generator completes.
+description: Validates all generated code for syntax, types, and A2A/Temporal compliance. Autonomously fixes issues. Invoked after infrastructure-generator completes.
 tools: Read, Edit, Bash, Grep, Glob
 model: inherit
 ```
 
 **Responsibilities**:
 - Run syntax validation: `python3 -m py_compile` on all Python files
-- Run type checking: `mypy --strict` on package directory
-- Check workflow sandbox compliance: `python3 -c "from {package}.workflow import {WorkflowClass}"`
+- Run type checking: `mypy --strict` on all packages
+- Check workflow sandbox compliance
 - Verify `pyproject.toml` has `[tool.uv] package = true`
-- Check console script configuration (synchronous entry points)
-- Verify activity argument counts match execute_activity calls
-- Check RetryPolicy import (from temporalio.common, not temporalio.workflow)
-- Verify all dataclasses have type hints
-- Check for common pitfalls from troubleshooting guide
+- **A2A-Specific Validations**:
+  - Agent cards use correct a2a-sdk types
+  - Skill IDs consistent across card and gateway
+  - Port uniqueness across agents
+  - Task queue uniqueness
+  - URL consistency (card URL matches gateway port)
 - **If errors found**: Fix them autonomously and re-validate
-- Generate validation report with:
-  - Syntax validation: PASS/FAIL
-  - Type checking: PASS/FAIL (with error details if failed)
-  - Sandbox compliance: PASS/FAIL
-  - Issues found and fixed
-  - Remaining issues (if any)
+- Generate validation report
 
 **Input**:
-- All files in `{workflow_name}_temporal/` directory
-- `pyproject.toml`
-- `conductor-analysis.json` (for context)
+- All files in project directory
+- `a2a-analysis.json` (for context)
 
 **Output**:
 - `VALIDATION_REPORT.md` with results
 - Fixed code files (if issues found)
 
 **Documentation References**:
-- `conductor-migration/conductor-migration-guide.md` (Phase 3)
-- `conductor-migration/conductor-quality-assurance.md` (validation procedures, success criteria)
-- `conductor-migration/conductor-troubleshooting.md` (all common issues)
+- `a2a-migration/a2a-quality-assurance.md` (validation procedures)
+- `a2a-migration/a2a-troubleshooting.md` (common issues)
 - `AGENTS.md` (Critical Pitfalls section)
 
 **Success Criteria**:
 - All syntax validation passes
 - `mypy --strict` passes with zero errors
-- Workflow sandbox import succeeds
-- No common pitfalls detected
+- Workflow sandbox imports succeed
+- All A2A-specific validations pass
 - Validation report generated
 
 ---
 
-### 6.5 Workflow Executor
+### 9. System Executor
 
-**Filename**: `subagents/workflow-executor.md`
+**Filename**: `claude/agents/system-executor.md`
 
 **Agent Configuration**:
 ```yaml
-name: workflow-executor
-description: Executes and validates the generated workflow end-to-end. Invoked after code-validator, before documentation-generator.
+name: system-executor
+description: Executes and validates the complete multi-agent A2A system end-to-end. Invoked after code-validator, before streamlit-generator.
 tools: Read, Write, Bash
 model: inherit
 ```
@@ -478,138 +651,185 @@ model: inherit
 **Responsibilities**:
 - Check if Temporal server is running (ports 7233/8233), start if needed
 - Install dependencies via `uv sync`
-- Analyze workflow type (simple vs. interactive with handlers)
-- Execute end-to-end test:
-  - Start worker process in background
-  - Execute workflow via starter
-  - For simple workflows: Wait for COMPLETED status (30-60s timeout)
-  - For interactive workflows: Send test interactions via `uv run interact`, verify responses
-- Validate execution using Temporal CLI commands (`temporal workflow show`)
+- Start ALL workers (one per agent)
+- Start ALL gateways (one per agent)
+- **A2A Verification**:
+  - Fetch agent cards from all agents
+  - Verify cards are valid JSON
+  - Send test A2A tasks
+  - Verify task lifecycle (submitted → working → completed)
+- **Cross-Agent Testing** (if applicable):
+  - Test inter-agent communication
+  - Verify durable handoff works
 - Handle failures autonomously:
-  - Parse error logs (worker.log, starter.log)
-  - Identify error types (imports, sandbox violations, activity failures)
-  - Invoke other agents to fix issues (code-validator, infrastructure-generator)
-  - Retry execution up to 3 times with fixes applied
-- Cleanup processes and PID files
-- Generate comprehensive `WORKFLOW_EXECUTION_REPORT.md`
+  - Parse error logs
+  - Identify error types
+  - Invoke code-validator to fix issues
+  - Retry execution up to 3 times
+- Cleanup all processes
+- Generate comprehensive `SYSTEM_EXECUTION_REPORT.md`
 
 **Input**:
-- `conductor-analysis.json`
-- All files in `{workflow_name}_temporal/` directory
-- `pyproject.toml`
+- `a2a-analysis.json`
+- All files in project directory
 - `VALIDATION_REPORT.md`
 
 **Output**:
-- `WORKFLOW_EXECUTION_REPORT.md` with:
+- `SYSTEM_EXECUTION_REPORT.md` with:
   - Execution summary (PASS/FAIL)
-  - Workflow ID and Web UI link
-  - Worker and starter logs
-  - Validation results
+  - Agent card verification results
+  - Task execution results
+  - Worker and gateway logs
   - Any errors and fixes applied
-  - Temporal CLI commands used
 
 **Documentation References**:
-- `conductor-migration/conductor-troubleshooting.md` (runtime errors)
-- `AGENTS.md` (understanding generated code structure)
+- `a2a-migration/a2a-troubleshooting.md` (runtime errors)
+- `a2a-migration/a2a-quality-assurance.md` (E2E testing)
 
 **Success Criteria**:
 - Temporal server is running
-- Worker starts without errors
-- Workflow executes without immediate failures
-- For simple workflows: Reaches COMPLETED status
-- For interactive workflows: Reaches RUNNING state, responds to test interactions
-- No workflow task failures in execution history
-- Worker logs show no crashes or critical errors
+- All workers start without errors
+- All gateways start without errors
+- Agent cards accessible at `/.well-known/agent.json`
+- A2A tasks can be sent and received
 - Execution report documents all results
-
-**Critical Considerations**:
-- This agent **proves the workflow works** before documentation claims it does
-- Uses autonomous fix-and-retry strategy (up to 3 rounds)
-- Distinguishes between simple and interactive workflows for different success criteria
-- Manages Temporal server, worker lifecycle, and cleanup
-- Can invoke other agents (code-validator, infrastructure-generator) to fix runtime issues
 
 ---
 
-### 7. Documentation Generator
+### 10. Streamlit Generator
 
-**Filename**: `subagents/documentation-generator.md`
+**Filename**: `claude/agents/streamlit-generator.md`
+
+**Agent Configuration**:
+```yaml
+name: streamlit-generator
+description: Generates streamlit_app.py for human-in-the-loop interaction with coordinator workflow. Invoked after system-executor passes validation.
+tools: Read, Write, Edit, Bash, Glob, Grep
+model: inherit
+```
+
+**Responsibilities**:
+- Read `a2a-analysis.json` to get `coordinator_interaction` schema
+- Read `shared/types.py` for dataclass definitions
+- Read `SYSTEM_EXECUTION_REPORT.md` for port and system info
+- Generate `streamlit_app.py` with:
+  - Form for workflow input fields (from `workflow_input` schema)
+  - Signal buttons for human decisions (from `signals`)
+  - Query result display (from `queries`)
+  - Real-time status updates via polling
+- Use `@st.cache_resource` for Temporal client
+- Use `st.session_state` for workflow_id persistence
+- Add streamlit dependency to `pyproject.toml`
+- **Validate the app runs correctly**:
+  - Syntax validation (`py_compile`)
+  - Import validation (no ImportError)
+  - Runtime validation (start headless, curl HTTP 200)
+- **Autonomously fix issues** and retry validation up to 3 times
+
+**Input**:
+- `a2a-analysis.json`
+- `shared/types.py`
+- `SYSTEM_EXECUTION_REPORT.md`
+- `pyproject.toml`
+
+**Output**:
+- `streamlit_app.py` at project root
+- Updated `pyproject.toml` (adds streamlit dependency)
+
+**Documentation References**:
+- `streamlit-ui-guide.md` (Streamlit patterns)
+- `a2a-migration/a2a-patterns-reference.md` (Temporal signal/query patterns)
+
+**Validation Process**:
+1. Syntax check: `python3 -m py_compile streamlit_app.py`
+2. Import check: `python3 -c "import streamlit_app"`
+3. Runtime check: Start Streamlit headless, curl localhost:8502, verify HTTP 200
+4. Cleanup: Kill Streamlit process
+
+**Success Criteria**:
+- Streamlit app generates forms from `coordinator_interaction.workflow_input`
+- Signal buttons created for each signal in `coordinator_interaction.signals`
+- Query display created for each query in `coordinator_interaction.queries`
+- Session state persists workflow_id across reruns
+- **Syntax validation passes**
+- **Import validation passes**
+- **Runtime validation passes (HTTP 200)**
+- **Process cleanup succeeds (no zombies)**
+
+---
+
+### 11. Documentation Generator
+
+**Filename**: `claude/agents/documentation-generator.md`
 
 **Agent Configuration**:
 ```yaml
 name: documentation-generator
-description: Generates comprehensive documentation and setup scripts. Invoked after code-validator passes validation.
+description: Generates comprehensive documentation for the multi-agent A2A system. Invoked after streamlit-generator completes.
 tools: Read, Write, Bash
 model: inherit
 ```
 
 **Responsibilities**:
-- Read all generated files and `conductor-analysis.json`
+- Read all generated files and `a2a-analysis.json`
 - Generate comprehensive `README.md`:
-  - Project overview (generated from Conductor workflow X)
+  - System overview
+  - Architecture diagram (ASCII)
   - Prerequisites (UV, Python 3.11+, Temporal server)
   - Quick start instructions
   - Project structure explanation
-  - How to run the worker
-  - How to run the starter
-  - How to interact with workflow (if human interaction present)
+  - How to run all components
+  - How to test the system
+  - Agent-by-agent documentation
+  - A2A protocol reference
   - Configuration options
   - Troubleshooting section
-- Generate `CONDUCTOR_COMPARISON.md`:
-  - Side-by-side comparison of Conductor JSON and Temporal Python
-  - Show how each Conductor task translates to Temporal code
-  - Highlight key differences and patterns used
-- Generate `CONDUCTOR_MIGRATION_NOTES.md`:
-  - Migration decisions made
-  - Patterns chosen (Signal vs Update decisions)
-  - Any assumptions or considerations
-  - Future customization recommendations
+- Generate `SYSTEM_ARCHITECTURE.md`:
+  - Detailed architecture explanation
+  - Agent interaction diagrams
+  - Data flow documentation
 - Create `setup.sh` script:
-  - Install dependencies: `uv venv && uv sync --all-extras`
+  - Install dependencies
   - Run validation commands
-  - Display success message
-- Update package `README.md` (inside package directory) with module documentation
+  - Display success message with next steps
 
 **Input**:
-- `conductor-analysis.json`
-- All files in `{workflow_name}_temporal/` directory
-- `pyproject.toml`
+- `a2a-analysis.json`
+- All files in project directory
 - `VALIDATION_REPORT.md`
+- `SYSTEM_EXECUTION_REPORT.md`
 
 **Output**:
 - `README.md` (project root)
-- `CONDUCTOR_COMPARISON.md`
-- `CONDUCTOR_MIGRATION_NOTES.md`
+- `SYSTEM_ARCHITECTURE.md`
 - `setup.sh` (executable)
-- `{workflow_name}_temporal/README.md` (module docs)
 
 **Documentation References**:
-- `conductor-migration/conductor-migration-guide.md` (Phase 4)
-- `README.md` (template structure to follow)
-- Example workflows for comparison format
+- `a2a-migration/README.md` (documentation template)
+- `a2a-migration/a2a-architecture.md` (architecture concepts)
 
 **Success Criteria**:
 - README is comprehensive and easy to follow
-- Comparison doc shows clear Conductor → Temporal mappings
-- Migration notes document all key decisions
-- setup.sh script is executable and functional
-- Documentation matches quality standards
+- Architecture diagram included
+- Running instructions are clear
+- All agents documented
+- setup.sh is executable and functional
 
 ---
 
 ## Communication Protocol
 
-### conductor-analysis.json Schema
+### a2a-analysis.json Schema
 
-This structured document serves as the primary communication medium between agents. All agents downstream of the analyzer read this file to understand the workflow requirements.
+This structured document serves as the primary communication medium between agents. All agents downstream of the analyzer read this file to understand the project requirements.
 
 **Location**: Project root directory
 
-**Schema**: See Agent 1 (Conductor Analyzer) output specification above.
+**Schema**: See Agent 1 (Spec Analyzer) output specification above.
 
 **Usage**:
-- **Agent 1** (Analyzer): Writes this file
-- **Agents 2-7 (plus 6.5)**: Read this file for context and requirements
+- **Agent 1** (Spec Analyzer): Writes this file
+- **Agents 2-11**: Read this file for context and requirements
 - **Main Agent**: Can inspect this file to track pipeline progress
 
 ---
@@ -618,20 +838,21 @@ This structured document serves as the primary communication medium between agen
 
 ### Directory Structure for Sub-Agents
 
-All sub-agent definitions should be placed in:
+All sub-agent definitions are placed in:
 ```
-subagents/
-├── conductor-analyzer.md
+claude/agents/
+├── spec-analyzer.md
 ├── project-scaffolder.md
+├── agent-card-generator.md
 ├── activity-generator.md
 ├── workflow-generator.md
+├── gateway-generator.md
 ├── infrastructure-generator.md
 ├── code-validator.md
-├── workflow-executor.md
+├── system-executor.md
+├── streamlit-generator.md
 └── documentation-generator.md
 ```
-
-When ready to use, copy or symlink to `.claude/agents/`.
 
 ### Sub-Agent File Format
 
@@ -679,7 +900,7 @@ Before starting, read these documentation files:
 
 ## Critical Pitfalls to Avoid
 
-[Specific common mistakes this agent must not make, from troubleshooting docs]
+[Specific common mistakes this agent must not make]
 
 ## Example
 
@@ -692,108 +913,64 @@ Main agent workflow:
 
 ```python
 # Main agent orchestrates the pipeline
-user: "Convert the Conductor workflow to Temporal"
+user: "Generate an A2A project from spec.md"
 
 main_agent:
-  1. Invoke conductor-analyzer sub-agent
-  2. Wait for conductor-analysis.json
+  1. Invoke spec-analyzer sub-agent
+  2. Wait for a2a-analysis.json
   3. Invoke project-scaffolder sub-agent
   4. Wait for package structure
-  5. Invoke activity-generator sub-agent
-  6. Wait for activities.py
-  7. Invoke workflow-generator sub-agent
-  8. Wait for workflow.py
-  9. Invoke infrastructure-generator sub-agent
-  10. Wait for worker.py, starter.py, and interact.py
-  11. Invoke code-validator sub-agent
-  12. If validation FAILS: halt and report errors
-  13. If validation PASSES: invoke workflow-executor sub-agent
-  14. Wait for execution results and WORKFLOW_EXECUTION_REPORT.md
-  15. If execution FAILS: review errors, possibly re-run validator or other agents
-  16. If execution PASSES: invoke documentation-generator
-  17. Report completion to user with summary including execution results
+  5. Invoke agent-card-generator sub-agent
+  6. Wait for agent_card.py files
+  7. Invoke activity-generator sub-agent
+  8. Wait for activities.py files
+  9. Invoke workflow-generator sub-agent
+  10. Wait for workflow.py files
+  11. Invoke gateway-generator sub-agent
+  12. Wait for gateway.py files
+  13. Invoke infrastructure-generator sub-agent
+  14. Wait for worker.py, run_all.py, starter.py
+  15. Invoke code-validator sub-agent
+  16. If validation FAILS: halt and report errors
+  17. If validation PASSES: invoke system-executor sub-agent
+  18. Wait for execution results
+  19. If execution FAILS: review errors, possibly re-run validator
+  20. If execution PASSES: invoke streamlit-generator sub-agent
+  21. Wait for streamlit_app.py
+  22. Invoke documentation-generator sub-agent
+  23. Report completion to user with summary
 ```
 
 ### Error Handling
 
-- **Agent 1-5** (Generators): If cannot proceed, write error to `MIGRATION_ERRORS.md` and halt
-- **Agent 6** (Validator): Autonomously fix errors, re-validate, report unfixable errors
-- **Agent 6.5** (Executor): Autonomously fix runtime errors, retry execution, report if unfixable
-- **Agent 7** (Documentation): Always runs if executor passes (or if user decides to proceed despite execution failures)
-
-### Context Window Management
-
-Each sub-agent operates in its own context window, preventing pollution of the main conversation. Key benefits:
-
-- **Analyzer** can read large Conductor JSON without bloating main context
-- **Workflow Generator** can read all primitives documentation without impacting main agent
-- **Validator** can read all generated code and run multiple validation passes
-- Each agent returns concise summary to main agent
+- **Agents 1-7** (Generators): If cannot proceed, write error to `GENERATION_ERRORS.md` and halt
+- **Agent 8** (Validator): Autonomously fix errors, re-validate, report unfixable errors
+- **Agent 9** (Executor): Autonomously fix runtime errors, retry execution, report if unfixable
+- **Agent 10** (Streamlit Generator): Generates UI after execution passes
+- **Agent 11** (Documentation): Always runs after streamlit-generator completes
 
 ---
 
-## Migration from Single-Agent System
+## Key Reference Files
 
-### Current Documentation Split
-
-The comprehensive `conductor-migration/` documentation will be referenced by sub-agents as follows:
-
-| Documentation File | Primary Readers |
-|--------------------|-----------------|
-| `conductor-migration-guide.md` | All agents (high-level process) |
-| `conductor-primitives-reference.md` | Analyzer, Activity Generator, **Workflow Generator** (critical) |
-| `conductor-human-interaction.md` | Analyzer, **Workflow Generator** (critical) |
-| `conductor-architecture.md` | Analyzer, Workflow Generator |
-| `conductor-quality-assurance.md` | **Code Validator** (critical) |
-| `conductor-troubleshooting.md` | Code Validator, all generators (pitfall awareness) |
-| `AGENTS.md` | All agents (reference implementations) |
-
-### Testing the Pipeline
-
-Test with the example workflow:
-```bash
-# Provided: conductor-definition/EXAMPLE_review_approval.json
-# Complex workflow with DO_WHILE + FORK_JOIN + nested SWITCH + HUMAN_TASK
-
-# Expected output:
-review_approval_temporal/
-├── __init__.py
-├── shared.py
-├── activities.py
-├── workflow.py
-├── worker.py
-└── starter.py
-
-# Plus documentation and validation report
-```
-
----
-
-## Advantages Over Single-Agent Approach
-
-1. **Focused Expertise**: Each agent specializes in one phase
-2. **Context Efficiency**: Sub-agents have their own context windows
-3. **Parallel Potential**: Future optimization could parallelize independent generators
-4. **Error Isolation**: Validation catches issues before documentation phase
-5. **Maintainability**: Easy to update one agent without affecting others
-6. **Scalability**: Can add new agents (e.g., "performance-optimizer", "test-generator") without restructuring
-
----
-
-## Next Steps
-
-1. **Implement each sub-agent** by creating markdown files in `subagents/` directory
-2. **Split AGENTS.md guidance** into relevant sub-agent system prompts
-3. **Test pipeline** with EXAMPLE_review_approval.json
-4. **Iterate** based on results
-5. **Optimize** workflow generator (most complex, may need decomposition)
+| File | Why Important |
+|------|---------------|
+| `tmp-resources/a2a-python/src/a2a/types.py` | A2A SDK types |
+| `tmp-resources/a2a-python/src/a2a/server/apps/jsonrpc/fastapi_app.py` | A2AFastAPIApplication |
+| `tmp-resources/a2a-python/src/a2a/client/client.py` | A2AClient for calls |
+| `a2a-temporal-example-spec.md` | Example input format |
+| `a2a-migration/*.md` | All migration documentation |
 
 ---
 
 ## Notes
 
-- **Workflow Generator** is the most complex and critical agent - may need most iteration
-- **Code Validator** must have autonomy to fix issues without human intervention
-- **conductor-analysis.json** schema may evolve as agents reveal additional needs
-- Consider adding **test-generator** agent in future for creating pytest test suites
+- **Workflow Generator** is the most complex and critical agent - uses Sonnet model
+- **Code Validator** and **System Executor** have autonomy to fix issues without human intervention
+- **a2a-analysis.json** schema may evolve as agents reveal additional needs
 - All agents should follow user's global Python standards (type hints, pytest, ruff, mypy strict)
+- Consider adding **test-generator** agent in future for creating pytest test suites
+
+---
+
+**Last Updated**: November 2024

@@ -15,10 +15,6 @@ REMEMBER: IF YOU HAVE NO INTERNET ACCESS, YOU WILL NOT BE ABLE TO GET THE `tempo
 * ✅ The Python Temporal SDK's `execute_activity()` expects either a single positional argument (for activities with one parameter) or the `args` keyword argument for multiple arguments. Passing multiple positional arguments directly will result in a TypeError.
 * ✅ **Activity function signatures must match argument counts**: When calling `execute_activity(func, args=[a, b])`, the activity function must accept exactly 2 parameters; mismatches cause "takes X positional argument but Y were given" errors.
 * ✅ **When you encounter errors or issues**, refer to the comprehensive troubleshooting section at the end of this document for common pitfalls and their solutions.
-* ✅ **CRITICAL - Conductor Migrations**: If migrating from Netflix Conductor JSON workflow definitions, you **MUST** follow the comprehensive guides in [conductor-migration/README.md](./conductor-migration/README.md), including:
-  - Cross-reference every Conductor task type with the [Primitives Reference](./conductor-migration/conductor-primitives-reference.md) before writing code
-  - Implement human-in-the-loop patterns correctly using the [Human Interaction Patterns](./conductor-migration/conductor-human-interaction.md) guide if your workflow has HUMAN_TASK, WAIT, or approval loops
-  - Follow all migration phases and quality standards as documented
 * ✅ **Always create a comprehensive README.md** for your project that includes:
   - Project overview and purpose
   - Prerequisites and dependencies
@@ -26,35 +22,6 @@ REMEMBER: IF YOU HAVE NO INTERNET ACCESS, YOU WILL NOT BE ABLE TO GET THE `tempo
   - Complete run guide with commands to start worker and execute workflows
   - Configuration details and environment variables
   - Troubleshooting common issues
-
----
-
-## Migration Scenarios
-
-### Migrating from Netflix Conductor
-
-**If you are migrating a Conductor JSON workflow definition to Temporal**, follow the comprehensive migration guide:
-
-➡️ **See [Conductor Migration Guide](./conductor-migration/README.md)** for complete migration instructions.
-
-**Quick detection**: You're in a migration scenario if:
-- You have a Conductor JSON workflow definition file (`.json`)
-- The task is to "migrate", "convert", or "translate" from Conductor to Temporal
-- You're working with Conductor task types (SIMPLE, HTTP, FORK_JOIN, SWITCH, etc.)
-
-**Migration approach overview**:
-1. **Analyze** the Conductor JSON to understand workflow structure and control flow
-2. **Generate** complete Temporal Python project with activities, workflows, worker, and starter
-3. **Validate** with syntax checking and type checking (mypy --strict)
-4. **Document** with comprehensive setup instructions and Conductor comparison
-
-**Key differences from building from scratch**:
-- Start with existing Conductor workflow definition rather than requirements
-- Follow structured 10-phase migration process
-- Generate comprehensive documentation automatically
-- Focus on faithful translation of Conductor logic to Temporal patterns
-
-**The rest of this document (AGENTS.md) applies to both migration and from-scratch scenarios** for general Temporal development practices and troubleshooting.
 
 ---
 

@@ -1,33 +1,21 @@
-# Temporal Conductor Migration Agent Template
+# A2A + Temporal Multi-Agent System Generator
 
-**Automatically convert Netflix Conductor workflows to Temporal Python projects using Claude Code.**
+**Automatically generate complete A2A (Agent-to-Agent) protocol compatible multi-agent systems powered by Temporal workflows from natural language specifications using Claude Code.**
 
-[![Diagram explanation](./diagram.jpg)](./diagram.jpg)
+## What This Does
 
-**⚠️ NOTE:** This agent can run for 30+ minutes and cost many Anthropic tokens (80k+)!
-
-**⚠️ NOTE:** The agent will ask you to approve _many_ tools and code generations along the way. I would _never_ recommend doing this outside of a sandbox environment but _if you wanted to_, run `claude --dangerously-skip-permissions` to ensure the agent cooks without interruption 🍳
-
-## Migrated project examples:
-* Temporal Document Approvals. [Readme](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test2/PROJECT_README.md) // [Code](https://github.com/steveandroulakis/temporal-conductor-migration-agent/tree/claude_test2/schema_approval_temporal). Based off the Conductor [document approvals example](https://github.com/conductor-sdk/conductor-examples/tree/main/document_approvals).
-* Temporal Insurance Claim Processing. [Readme](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/insurance-claim/PROJECT_README.md) // [Code](https://github.com/steveandroulakis/temporal-conductor-migration-agent/tree/insurance-claim/insurance_claim_temporal). Based off the Conductor [insurance claim processing example](https://github.com/conductor-oss/awesome-conductor-apps/blob/960afd67a4858f28ba5ad711492748f0fb91e07a/typescript/claims-workflow/workflows/claim_workflow.json#L2)
-* Temporal Agentic Security. [Code](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/example-agentic-security-2/agentic_security_example_temporal/workflow.py). Based off the Conductor [agentic security example](https://github.com/conductor-oss/awesome-conductor-apps/tree/960afd67a4858f28ba5ad711492748f0fb91e07a/examples/agentic_security_workflow)
-* Temporal OSS HTTP workflow example [Readme](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/OSS-HTTP-workflow/PROJECT_README.md) // [Code](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/OSS-HTTP-workflow/fetch_users_temporal/workflow.py)
-  Based off the Conductor [OSS HTTP workflow example](https://gist.github.com/ashutoshsahoo/8588009c0c3c4bf835f534e4ab7e1b09#file-netflix_conductor_oss_http_workflow_example-md)
-* Temporal Shopping Cart. [Readme](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test3/PROJECT_README.md) // [Code](https://github.com/steveandroulakis/temporal-conductor-migration-agent/tree/claude_test3/shopping_cart_temporal). Based off the Conductor [shopping cart example](https://github.com/conductor-sdk/conductor-examples/tree/main/shopping_cart).
-* Temporal Check Address (USPS). [Readme](https://github.com/steveandroulakis/temporal-conductor-migration-agent/blob/claude_test4/PROJECT_README.md) // [Code](https://github.com/steveandroulakis/temporal-conductor-migration-agent/tree/claude_test4/check_address_temporal). Based off the Conductor [USPS check address example](https://github.com/conductor-sdk/conductor-examples/tree/main/US_post_office)
-
-## What the agent does
-
-This Claude Code project provides a 8-agent sequential pipeline that:
-1. Analyzes Conductor JSON workflow definitions
-2. Generates complete, production-ready Temporal Python projects with:
-   - Type-safe activities and workflows
-   - Worker and starter scripts
-   - Comprehensive documentation
-   - Automated setup scripts
-3. Validates all generated code, runs it, and autonomously fixes issues
-4. Uses the [Temporal skill](.claude/skills/temporal/SKILL.md) to manage workflow execution, monitoring, and troubleshooting throughout the migration process
+Given a natural language specification, this Claude Code-powered system:
+1. Analyzes the specification to identify agents, skills, and inter-agent communication patterns
+2. Generates a complete, production-ready multi-agent Temporal Python project with:
+   - Per-agent packages with type-safe code
+   - A2A Agent Cards for discovery (using a2a-sdk)
+   - FastAPI gateways implementing A2A protocol
+   - Temporal workflows and activities for each agent
+   - Inter-agent communication via A2A activities
+   - System orchestrator for managing all components
+3. Validates all generated code across all agents
+4. Executes the entire system to verify it works
+5. Produces comprehensive documentation
 
 ## Quick Start
 
@@ -37,58 +25,100 @@ This Claude Code project provides a 8-agent sequential pipeline that:
 - [UV package manager](https://github.com/astral-sh/uv)
 - [Temporal CLI](https://temporal.io/download)
 
-### Step 1: Create Your Repository
+### Usage
 
-1. Click the **"Use this template"** button at the top of this repository
-2. Give your new repository a name (e.g., `migrate-my-workflow`)
-3. Clone your new repository locally
-
-### Step 2: Add your Conductor Workflow
-Place your Conductor JSON workflow in:
-   ```bash
-   cd conductor-definition
-   # Add your Conductor workflow.json here
-   # REPLACE the example json
-   # ENSURE YOU HAVE A SINGLE CONDUCTOR PROJECT IN THIS DIRECTORY
-   ```
-
-### Step 3: Run Migration Command
 In Claude Code, execute:
 ```
-/migrate-conductor
+/generate-a2a path/to/specification.md [optional context]
 ```
 
-OR with optional context/requirements, for example:
+**Example:**
 ```
-/migrate-conductor My USPS username is steveandroulakis. If API calls fail, use mock responses as placeholders.
+/generate-a2a a2a-temporal-example-spec.md This is a food ordering system. Use mock data for restaurant APIs.
 ```
-The arguments you provide will be passed to all agents in the pipeline, informing their code generation decisions.
 
 The pipeline will automatically:
-- Analyze your Conductor workflow
-- Generate a complete Temporal Python project
-- Use your provided context to guide activity implementations
+- Analyze your specification
+- Generate a complete multi-agent A2A project
+- Use your provided context to guide implementations
 - Validate and fix any issues
 - Create comprehensive documentation
 
-### After Migration
+### After Generation
+
 Your generated project will include:
-- `{workflow_name}_temporal/` - Complete Python package
-- `setup.sh` - Automated setup script
-- ...and comprehensive markdown documentation on running the project.
+```
+{project_name}/
+├── shared/
+│   └── types.py
+├── {agent1}_agent/
+│   ├── agent_card.py
+│   ├── activities.py
+│   ├── workflow.py
+│   ├── worker.py
+│   └── gateway.py
+├── {agent2}_agent/
+│   └── ...
+├── orchestrator.py
+├── pyproject.toml
+├── setup.sh
+├── README.md
+├── A2A_INTEGRATION.md
+├── VALIDATION_REPORT.md
+└── SYSTEM_EXECUTION_REPORT.md
+```
+
+### Running the System
+
+```bash
+# Setup
+./setup.sh
+
+# Start Temporal
+temporal server start-dev
+
+# Start all components
+uv run orchestrator start
+
+# Verify
+curl http://localhost:8000/.well-known/agent.json
+```
 
 ## Architecture
 
 See [CLAUDE.md](./CLAUDE.md) for complete pipeline architecture and agent specifications.
 
-- `conductor-migration/` - Comprehensive migration guides
-- `.claude/` - Subagents and migration command
+- `a2a-migration/` - Comprehensive A2A migration guides
+- `claude/` - Subagents and generation command
 
-## Future work
-- Refinements to subagents (maybe speed it up a bit?)
-- Test with many more conductor workflow types
-- I should generate tests!
-- Ensure the resulting docs aren't written all over the repo (better file organization)
+## The A2A Value Proposition
+
+A2A (Agent-to-Agent) protocol enables:
+- **Discovery**: Agents expose capabilities via Agent Cards
+- **Interoperability**: Standard JSON-RPC 2.0 communication
+- **Cross-boundary communication**: Connect different Temporal systems via HTTP
+
+### The Coordinator-Services Pattern
+
+This generator excels at creating systems where:
+- A **COORDINATOR** agent queries multiple **SERVICE** agents in parallel
+- Each agent has its own Temporal workflow for durability
+- A2A protocol handles inter-system communication
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PersonalAssistant                            │
+│                   (COORDINATOR Agent)                           │
+│                   Temporal Namespace A                          │
+└─────────────────────────────────────────────────────────────────┘
+         │ A2A Protocol (HTTP)          │ A2A Protocol (HTTP)
+         ▼                              ▼
+┌─────────────────────┐     ┌─────────────────────┐
+│     BurgerBot       │     │     TacoTime        │
+│  (SERVICE Agent)    │     │  (SERVICE Agent)    │
+│  Temporal NS B      │     │  Temporal NS C      │
+└─────────────────────┘     └─────────────────────┘
+```
 
 ---
 
