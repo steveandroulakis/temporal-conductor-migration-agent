@@ -1,7 +1,8 @@
 ---
 name: temporal
 description: "Manage Temporal workflows: server lifecycle, worker processes, workflow execution, monitoring, and troubleshooting for Python SDK with temporal server start-dev."
-version: 1.0.0
+version: 1.0.1
+allowed-tools: "Bash(.claude/skills/temporal/scripts/*:*), Read"
 ---
 
 # Temporal Skill
@@ -76,22 +77,22 @@ Understanding how Temporal components interact is essential for troubleshooting:
 
 ```bash
 # 1. Start server
-./tools/ensure-server.sh
+./scripts/ensure-server.sh
 
 # 2. Start worker (ensures no old workers, starts fresh one)
-./tools/ensure-worker.sh
+./scripts/ensure-worker.sh
 
 # 3. Execute workflow
 uv run starter  # Capture workflow_id from output
 
 # 4. Wait for completion
-./tools/wait-for-workflow-status.sh --workflow-id <id> --status COMPLETED
+./scripts/wait-for-workflow-status.sh --workflow-id <id> --status COMPLETED
 
 # 5. Get result (IMPORTANT: verify result is correct, not an error message)
-./tools/get-workflow-result.sh --workflow-id <id>
+./scripts/get-workflow-result.sh --workflow-id <id>
 
 # 6. CLEANUP: Kill workers when done
-./tools/kill-worker.sh
+./scripts/kill-worker.sh
 ```
 
 ---
@@ -111,7 +112,7 @@ uv run starter  # Capture workflow_id from output
 
 ```bash
 # PREFERRED: Smart restart (kills old, starts fresh)
-./tools/ensure-worker.sh
+./scripts/ensure-worker.sh
 ```
 
 This command:
@@ -124,10 +125,10 @@ This command:
 
 ```bash
 # List all running workers
-./tools/list-workers.sh
+./scripts/list-workers.sh
 
 # Check specific worker health
-./tools/monitor-worker-health.sh
+./scripts/monitor-worker-health.sh
 
 # View worker logs
 tail -f $CLAUDE_TEMPORAL_LOG_DIR/worker-$(basename "$(pwd)").log
@@ -143,13 +144,13 @@ tail -f $CLAUDE_TEMPORAL_LOG_DIR/worker-$(basename "$(pwd)").log
 
 ```bash
 # Kill current project's worker
-./tools/kill-worker.sh
+./scripts/kill-worker.sh
 
 # Kill ALL workers (full cleanup)
-./tools/kill-all-workers.sh
+./scripts/kill-all-workers.sh
 
 # Kill all workers AND server
-./tools/kill-all-workers.sh --include-server
+./scripts/kill-all-workers.sh --include-server
 ```
 
 ---
@@ -172,7 +173,7 @@ uv run starter
 temporal workflow describe --workflow-id <id>
 
 # Wait for specific status
-./tools/wait-for-workflow-status.sh \
+./scripts/wait-for-workflow-status.sh \
   --workflow-id <id> \
   --status COMPLETED \
   --timeout 60
@@ -192,7 +193,7 @@ temporal workflow describe --workflow-id <id>
 ### Getting Results
 
 ```bash
-./tools/get-workflow-result.sh --workflow-id <id>
+./scripts/get-workflow-result.sh --workflow-id <id>
 ```
 
 **IMPORTANT - False Positive Detection**:
@@ -217,10 +218,10 @@ Workflows may `COMPLETE` but return undesired results (e.g., error messages in t
 temporal workflow describe --workflow-id <id>
 
 # Check for stalled workflows (workflows stuck in RUNNING)
-./tools/find-stalled-workflows.sh
+./scripts/find-stalled-workflows.sh
 
 # Analyze specific workflow errors
-./tools/analyze-workflow-error.sh --workflow-id <id>
+./scripts/analyze-workflow-error.sh --workflow-id <id>
 ```
 
 ### Step 2: Diagnose Using This Decision Tree
@@ -233,7 +234,7 @@ Workflow not behaving as expected?
 │   ├── Is it an interactive workflow waiting for signal/update?
 │   │   └── YES → Send the required interaction
 │   │
-│   └── NO → Run: ./tools/find-stalled-workflows.sh
+│   └── NO → Run: ./scripts/find-stalled-workflows.sh
 │       │
 │       ├── WorkflowTaskFailed detected
 │       │   │
@@ -248,15 +249,15 @@ Workflow not behaving as expected?
 │               Workflow will auto-retry with new code.
 │
 ├── Status: COMPLETED but wrong result
-│   └── Check result: ./tools/get-workflow-result.sh --workflow-id <id>
+│   └── Check result: ./scripts/get-workflow-result.sh --workflow-id <id>
 │       Is result an error message? → Fix workflow/activity logic
 │
 ├── Status: FAILED
-│   └── Run: ./tools/analyze-workflow-error.sh --workflow-id <id>
-│       Fix code → ./tools/ensure-worker.sh → Start NEW workflow
+│   └── Run: ./scripts/analyze-workflow-error.sh --workflow-id <id>
+│       Fix code → ./scripts/ensure-worker.sh → Start NEW workflow
 │
 ├── Status: TIMED_OUT
-│   └── Increase timeouts → ./tools/ensure-worker.sh → Start NEW workflow
+│   └── Increase timeouts → ./scripts/ensure-worker.sh → Start NEW workflow
 │
 └── Workflow never starts
     └── Check: Worker running? Task queue matches? Workflow registered?
@@ -282,12 +283,12 @@ Non-determinism occurs when workflow code changes while a workflow is running, c
 temporal workflow terminate --workflow-id <id>
 
 # 2. Kill existing workers
-./tools/kill-worker.sh
+./scripts/kill-worker.sh
 
 # 3. Fix the workflow code if needed
 
 # 4. Restart worker with corrected code
-./tools/ensure-worker.sh
+./scripts/ensure-worker.sh
 
 # 5. Verify workflow logic is correct
 
@@ -308,12 +309,12 @@ For workflow task errors that are NOT non-determinism (code bugs, missing regist
 **Fix procedure**:
 ```bash
 # 1. Identify the error
-./tools/analyze-workflow-error.sh --workflow-id <id>
+./scripts/analyze-workflow-error.sh --workflow-id <id>
 
 # 2. Fix the root cause (code bug, worker config, etc.)
 
 # 3. Kill and restart worker with fixed code
-./tools/ensure-worker.sh
+./scripts/ensure-worker.sh
 
 # 4. NO NEED TO TERMINATE - the workflow will automatically resume
 #    The new worker picks up where it left off and continues execution
@@ -334,7 +335,7 @@ Workflows can appear stalled because an activity keeps failing and retrying.
 **Diagnosis**:
 ```bash
 # Check for excessive activity retries
-./tools/find-stalled-workflows.sh
+./scripts/find-stalled-workflows.sh
 
 # Look for ActivityTaskFailed count
 # Check worker logs for retry messages
@@ -346,7 +347,7 @@ tail -100 $CLAUDE_TEMPORAL_LOG_DIR/worker-$(basename "$(pwd)").log
 # 1. Fix the activity code
 
 # 2. Restart worker with fixed code
-./tools/ensure-worker.sh
+./scripts/ensure-worker.sh
 
 # 3. Worker auto-retries with new code
 #    No need to terminate or restart workflow
@@ -359,12 +360,12 @@ When all retries are exhausted, the activity fails permanently.
 **Fix procedure**:
 ```bash
 # 1. Analyze the error
-./tools/analyze-workflow-error.sh --workflow-id <id>
+./scripts/analyze-workflow-error.sh --workflow-id <id>
 
 # 2. Fix activity code
 
 # 3. Restart worker
-./tools/ensure-worker.sh
+./scripts/ensure-worker.sh
 
 # 4. Start NEW workflow (old one has failed)
 uv run starter
@@ -430,17 +431,17 @@ temporal workflow query \
 
 ### Recipe 1: Clean Start (Fresh Environment)
 ```bash
-./tools/kill-all-workers.sh
-./tools/ensure-server.sh
-./tools/ensure-worker.sh
+./scripts/kill-all-workers.sh
+./scripts/ensure-server.sh
+./scripts/ensure-worker.sh
 uv run starter
 ```
 
 ### Recipe 2: Debug Stalled Workflow
 ```bash
 # 1. Find what's wrong
-./tools/find-stalled-workflows.sh
-./tools/analyze-workflow-error.sh --workflow-id <id>
+./scripts/find-stalled-workflows.sh
+./scripts/analyze-workflow-error.sh --workflow-id <id>
 
 # 2. Check worker logs
 tail -100 $CLAUDE_TEMPORAL_LOG_DIR/worker-$(basename "$(pwd)").log
@@ -450,38 +451,38 @@ tail -100 $CLAUDE_TEMPORAL_LOG_DIR/worker-$(basename "$(pwd)").log
 
 ### Recipe 3: Clear Stalled Environment
 ```bash
-./tools/find-stalled-workflows.sh
-./tools/bulk-cancel-workflows.sh
-./tools/kill-worker.sh
-./tools/ensure-worker.sh
+./scripts/find-stalled-workflows.sh
+./scripts/bulk-cancel-workflows.sh
+./scripts/kill-worker.sh
+./scripts/ensure-worker.sh
 ```
 
 ### Recipe 4: Test Interactive Workflow
 ```bash
-./tools/ensure-worker.sh
+./scripts/ensure-worker.sh
 uv run starter  # Get workflow_id
-./tools/wait-for-workflow-status.sh --workflow-id $workflow_id --status RUNNING
+./scripts/wait-for-workflow-status.sh --workflow-id $workflow_id --status RUNNING
 uv run interact --workflow-id $workflow_id --signal-name "approval" --data '{"approved": true}'
-./tools/wait-for-workflow-status.sh --workflow-id $workflow_id --status COMPLETED
-./tools/get-workflow-result.sh --workflow-id $workflow_id
-./tools/kill-worker.sh  # CLEANUP
+./scripts/wait-for-workflow-status.sh --workflow-id $workflow_id --status COMPLETED
+./scripts/get-workflow-result.sh --workflow-id $workflow_id
+./scripts/kill-worker.sh  # CLEANUP
 ```
 
 ### Recipe 5: Check Recent Workflow Results
 ```bash
 # List recent workflows
-./tools/list-recent-workflows.sh --minutes 30
+./scripts/list-recent-workflows.sh --minutes 30
 
 # Check results (verify they're correct, not error messages!)
-./tools/get-workflow-result.sh --workflow-id <id1>
-./tools/get-workflow-result.sh --workflow-id <id2>
+./scripts/get-workflow-result.sh --workflow-id <id1>
+./scripts/get-workflow-result.sh --workflow-id <id2>
 ```
 
 ---
 
 ## Tool Reference
 
-### Lifecycle Tools
+### Lifecycle Scripts
 
 | Tool | Description | Key Options |
 |------|-------------|-------------|
@@ -491,7 +492,7 @@ uv run interact --workflow-id $workflow_id --signal-name "approval" --data '{"ap
 | `kill-all-workers.sh` | Kill all workers | `--include-server` |
 | `list-workers.sh` | List running workers | - |
 
-### Monitoring Tools
+### Monitoring Scripts
 
 | Tool | Description | Key Options |
 |------|-------------|-------------|
@@ -500,7 +501,7 @@ uv run interact --workflow-id $workflow_id --signal-name "approval" --data '{"ap
 | `monitor-worker-health.sh` | Check worker status | - |
 | `wait-for-workflow-status.sh` | Block until status | `--workflow-id`, `--status`, `--timeout` |
 
-### Debugging Tools
+### Debugging Scripts
 
 | Tool | Description | Key Options |
 |------|-------------|-------------|
